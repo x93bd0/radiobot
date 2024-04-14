@@ -2,8 +2,42 @@
   'default': 'en',
 
   'es': {
+    'playing': '',
+    'stopped': '',
+    'resumed': '',
+    'paused': '',
+    'volume_set_to': '',
+
+    'joining_voice': '',
+    'joining_chat': '',
+    'generating_link': '',
+
+    'no_payload_play': '',
+    'not_in_voice': '',
+
+    'cant_generate_link': '',
+    'cant_join_chat': '',
+
+    'volume_valueerror': '',
   },
 
   'en': {
+    'playing': '▶️ Currently playing [audio]({})',
+    'stopped': '⏹  Player left voice chat',
+    'resumed': '⏯ Stream resumed',
+    'paused': '⏯ Stream paused',
+    'volume_set_to': '🔊 Volume set to {}% (take in account, that this command normally fails due to a Telegram bug)',
+
+    'joining_voice': '⏳ Joining voice chat...',
+    'joining_chat': '⏳ Joining chat...',
+    'generating_link': '⏳ Generating join link...',
+
+    'no_payload_play': '❌ `/play` command can\'t be used without any URL',
+    'not_in_voice': '❌ Player is not in the voice chat',
+
+    'cant_generate_link': '❌ Can\'t generate join link (please check if the bot is admin, and haves the permission to generate them)',
+    'cant_join_chat': '❌ Player can\'t join chat (please check if the player is banned from the chat, if so, unban it)',
+
+    'volume_valueerror': '❌ Volume must be an integer value between 1 and 200',
   }
 }
