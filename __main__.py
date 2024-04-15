@@ -14,10 +14,12 @@ from pyrogram import Client, filters, idle
 from ntgcalls import FFmpegError
 from pytgcalls import PyTgCalls
 import storage
+import json
 import time
 import os
 
 
+# TODO: Modify last 'playing' status message on next
 # TODO: Protect from accesing files
 # TODO: Implement playlist limit
 # TODO: Implement permissions
@@ -34,7 +36,7 @@ class CustomClient(Client):
     self.ExtractChatID = storage.ExtractChatID
 
     with open('strings.json', 'r') as _ui:
-      self.pseudo_ui: Dict[str, Any] = _ui
+      self.pseudo_ui: Dict[str, Any] = json.load(_ui)
     self.ui: Callable = lambda message: self.pseudo_ui[self._extract_language(message)]
 
   def _extract_language(self, message: Message, default: str = 'en') -> str:
@@ -106,7 +108,7 @@ async def play(client, message) -> None:
       await userbot.join_chat(link.invite_link)
 
     except InviteHashExpired:
-      raise Exception('To implement! Invalid chat invite link')
+      await info.edit_text(client.ui(message)['cant_join_chat'])
       return
 
   # TODO: Detect whether group call is inactive or else
@@ -190,6 +192,8 @@ async def next_callback(_: PyTgCalls, update: Update) -> None:
   _id: int = client._ustorage.lock_chat(chat_id)
   time.sleep(0.1)
   if _id != client._ustorage.get_lock_time(chat_id):
+    time.sleep(1)
+    next_callback(_, update)
     return  # Another method is running
 
   _next: str = client._ustorage.playlist_dequeue(chat_id)
