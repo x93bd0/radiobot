@@ -17,7 +17,7 @@ class TemporaryStorage:
     self._db.execute(
       'create table lock_data (chat_id integer primary key, time timestamp, lock_level integer)')
     self._db.execute(
-      'create table playlist (chat_id integer, song_url varchar, time timestamp)')
+      'create table playlist (chat_id integer, song_url varchar, song_author varchar, song_name varchar, time timestamp)')
     self._db.execute(
       'create table plsize (chat_id integer, size integer)')
 
@@ -63,12 +63,12 @@ class TemporaryStorage:
       'delete from lock_data where chat_id=?', (chat_id,))
 
 
-  def fetch_playlist(self, chat_id: int, limit: int = 10) -> List[Tuple[int, int]]:
+  def fetch_playlist(self, chat_id: int, limit: int = 10) -> List[Tuple[int, int, str, str]]:
     cursor: sqlite3.Cursor = self._db.cursor()
     cursor.execute(
-      'select song_url, time from playlist where chat_id = ? limit ?',
+      'select song_url, time, song_author, song_name from playlist where chat_id = ? limit ?',
       (chat_id, limit))
-    ret: Optional[List[Tuple[int, int]]] = cursor.fetchall()
+    ret: Optional[List[Tuple[int, int, str, str]]] = cursor.fetchall()
     if not ret:
       return []
     return ret
@@ -89,27 +89,35 @@ class TemporaryStorage:
       return 0
     return ret[0]
 
-  def playlist_enqueue(self, chat_id: int, url: str) -> int:
+  def playlist_enqueue(
+    self, chat_id: int, url: str,
+    author: str = '', name: str = ''
+  ) -> int:
     plsize: int = self.playlist_size(chat_id)
     if plsize == 0:
+      plsize = 1
       self._db.execute(
         'insert into plsize values (?, ?)',
-        (chat_id, 1))
+        (chat_id, 2))
+
     else:
       self._db.execute(
         'update plsize set size = ? where chat_id = ?',
         (plsize + 1, chat_id))
 
+    # TODO: implement playlist author & name
     self._db.execute(
-      'insert into playlist values (?, ?, ?)',
-      (chat_id, url, time.time()))
+      'insert into playlist values (?, ?, ?, ?, ?)',
+      (chat_id, url, author, name, time.time()))
     return plsize
 
-  def playlist_dequeue(self, chat_id: int) -> Optional[Tuple[int, str]]:
+  def playlist_dequeue(
+    self, chat_id: int
+  ) -> Optional[Tuple[int, str, str, str]]:
     cursor: sqlite3.Cursor = self._db.cursor()
     cursor.execute(
-      'select song_url, time from playlist where chat_id = ? limit 1', (chat_id,))
-    ret: Optional[Tuple[int, int]] = cursor.fetchone()
+      'select song_url, time, song_author, song_name from playlist where chat_id = ? limit 1', (chat_id,))
+    ret: Optional[Tuple[int, int, str, str]] = cursor.fetchone()
     if not ret:
       self._db.execute(
         'delete from plsize where chat_id = ?', (chat_id,))
@@ -118,7 +126,9 @@ class TemporaryStorage:
       'delete from playlist where chat_id = ? and time = ?',
       (chat_id, ret[1]))
     return (
-      self.playlist_size(chat_id) - self.playlist_dsize(chat_id), ret[0])
+      self.playlist_size(chat_id) - self.playlist_dsize(chat_id),
+      ret[0], ret[2], ret[3]
+    )
 
   def clean_playlist(self, chat_id: int) -> None:
     self._db.execute(

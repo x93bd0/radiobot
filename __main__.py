@@ -26,11 +26,13 @@ import json
 import os
 
 
+# TODO: Implement status command
+# TODO: Implement ignore(n) command
 # TODO: Implement playlist limit
 # TODO: Implement permissions
 # TODO: Implement group language
+# TODO: Implement playing from telegram audios
 # TODO: Improve playing/enqueued messages
-# TODO: Remove pause & resume from cnext (/next) command
 
 
 NEXT_LOCK_LEVEL:       int = 2
@@ -126,7 +128,7 @@ class CustomClient(Client):
 
   # TODO: Support message input
   async def player_next(self, chat_id: int) -> None:
-    _next: Tuple[int, str] = client._ustorage.playlist_dequeue(chat_id)
+    _next: Optional[Tuple[int, str, str, str]] = client._ustorage.playlist_dequeue(chat_id)
     if not _next:
       try:
         await callapi.leave_group_call(chat_id)
@@ -257,9 +259,7 @@ async def resume(client, message) -> None:
 @storage.UseLock(NEXT_LOCK_LEVEL)
 async def cnext(client, message) -> None:
   try:
-    await callapi.pause_stream(message.chat.id)
     await client.player_next(message.chat.id)
-    await callapi.resume_stream(message.chat.id)
 
   except NotInGroupCallError:
     await client.send_status(message, client.ui(message)['not_in_voice'])
