@@ -5,6 +5,7 @@
     "playing": "▶️ Reproduciendo [#{} audio]({})",
     "stopped": "⏹  Reproducción terminada",
     "resumed": "⏯ Reproducción resumida",
+    "enqueued": "⏳ Audio puesto en cola\n#️⃣ Posición #{}\n🔗 [Audio]({})",
     "paused": "⏯ Reproducción pausada",
     "stream_ended": "🔚 Reproducción finalizada",
     "volume_set_to": "🔊 Volumen establecido al {}%\n⚠️ Tenga en cuenta que este comando puede fallar por un bug de Telegram",
@@ -13,19 +14,22 @@
     "joining_chat": "⏳ Uniéndose al chat...",
     "generating_link": "⏳ Generando invitación al chat...",
 
+    "no_chat": "❌ No hay ningún chat de voz activo",
     "no_payload_play": "❌ El comando `/play` no puede ser usado sin ninguna URL",
     "not_in_voice": "❌ No se está reproduciendo nada",
 
     "cant_generate_link": "❌ ¡No se puede generar el enlace de invitación!\nℹ️ El bot necesita ser administrador y debe tener la opción de `Invitar usuarios vía Link` activada",
     "cant_join_chat": "❌ El usuario ´Player´ no se puede unir al chat\nℹ️ Si el usuario fue baneado previamente del chat, se le debe eliminar de la lista de usuarios baneados",
 
-    "volume_valueerror": "❌ El valor del volumen debe ser un número entre el 1 y el 200"
+    "volume_valueerror": "❌ El valor del volumen debe ser un número entre el 1 y el 200",
+    "invalid_url": "❌ La URL del audio es inválida"
   },
 
   "en": {
     "playing": "▶️ Currently playing [#{} audio]({})",
     "stopped": "⏹  Player left voice chat",
     "resumed": "⏯ Stream resumed",
+    "enqueued": "⏳ Audio enqueued\n#️⃣ Position #{}\n🔗 [Audio]({})",
     "paused": "⏯ Stream paused",
     "stream_ended": "🔚 Stream ended",
     "volume_set_to": "🔊 Volume set to {}%\n⚠️ Take in account, that this command normally fails due to a Telegram bug",
@@ -34,12 +38,14 @@
     "joining_chat": "⏳ Joining chat...",
     "generating_link": "⏳ Generating join link...",
 
+    "no_chat": "❌ There's no active voice chat",
     "no_payload_play": "❌ `/play` command can't be used without any URL",
     "not_in_voice": "❌ Player is not in the voice chat",
 
     "cant_generate_link": "❌ Can't generate join link\nℹ️ Check if the bot is admin, and haves the permission to generate them",
     "cant_join_chat": "❌ Player can't join chat\nℹ️ Check if the player is banned from the chat, if so, unban it",
 
-    "volume_valueerror": "❌ Volume must be an integer value between 1 and 200"
+    "volume_valueerror": "❌ Volume must be an integer value between 1 and 200",
+    "invalid_url": "❌ Invalid audio URL"
   }
 }

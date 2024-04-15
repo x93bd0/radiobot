@@ -17,6 +17,7 @@ from pytgcalls.types import MediaStream, AudioQuality, Update
 from pyrogram.types import ChatInviteLink, Message
 from typing import Self, Dict, Any, Callable, Union
 from pyrogram import Client, filters, idle
+from validators import url as vurl
 from ntgcalls import FFmpegError
 from pytgcalls import PyTgCalls
 import asyncio
@@ -25,16 +26,18 @@ import json
 import os
 
 
-# TODO: Modify last 'playing' status message on next
-# TODO: Protect from accesing files
 # TODO: Implement playlist limit
 # TODO: Implement permissions
 # TODO: Implement group language
+# TODO: Improve playing/enqueued messages
+# TODO: Remove pause & resume from cnext (/next) command
 
 
-NEXT_RETRY_COUNT: int = 15
-NEXT_SLEEP: float = 0.5
-MSGID_THREESHOLD: int = 5
+NEXT_LOCK_LEVEL:       int = 2
+NEXT_RETRY_COUNT:      int = 15
+NEXT_SLEEP:          float = 0.5
+MSGID_THREESHOLD:      int = 5
+CHAT_INVITE_LINK_NAME: str = 'RadioBot User'
 
 
 class CustomClient(Client):
@@ -57,6 +60,110 @@ class CustomClient(Client):
     if lc not in self.pseudo_ui:
       return default
     return lc
+
+  async def player_play(self, chat_id: Union[Message, int], url: str) -> None:
+    message: Message
+    cid: int
+
+    if isinstance(chat_id, int):
+      cid = chat_id
+      message = Message(id=-1)
+
+    elif isinstance(chat_id, Message):
+      message = chat_id
+      cid = message.chat.id
+
+    else:
+      raise Exception('Programming error!')
+
+    try:
+      await callapi.get_active_call(cid)
+      idx: int = client._ustorage.playlist_enqueue(
+        cid, url)
+      await client.send_status(
+        message, client.ui(message)['enqueued'].format(idx, url))
+      return
+
+    except GroupCallNotFound:
+      pass
+
+    info: Message = \
+      await client.send_status(message, client.ui(message)['joining_voice'])
+    try:
+      await userbot.get_chat(cid)
+
+    except ChannelInvalid:
+      await info.edit_text(client.ui(message)['generating_link'])
+
+      link: ChatInviteLink
+      try:
+        link = await client.create_chat_invite_link(
+          cid, name=CHAT_INVITE_LINK_NAME, member_limit=1)
+
+      except ChatAdminRequired:
+        await info.edit_text(client.ui(messagae)['cant_generate_link'])
+        return
+
+      try:
+        await info.edit_text(client.ui(message)['joining_chat'])
+        await userbot.join_chat(link.invite_link)
+
+      except InviteHashExpired:
+        await info.edit_text(client.ui(message)['cant_join_chat'])
+        return
+
+    try:
+      await callapi.join_group_call(cid, MediaStream(
+        url, video_flags=MediaStream.IGNORE,
+        audio_flags=MediaStream.REQUIRED
+      ))
+
+    except ChatAdminRequired:
+      await info.edit_text(client.ui(message)['no_chat'])
+      return
+
+    await info.edit_text(client.ui(message)['playing'].format(0, url))
+
+  # TODO: Support message input
+  async def player_next(self, chat_id: int) -> None:
+    _next: Tuple[int, str] = client._ustorage.playlist_dequeue(chat_id)
+    if not _next:
+      try:
+        await callapi.leave_group_call(chat_id)
+      except (NoActiveGroupCall, NotInGroupCallError):
+        return
+
+      await client.send_status(chat_id, client.ui({})['stream_ended'])
+      return
+
+    try:
+      await callapi.change_stream(chat_id, MediaStream(
+        _next[1], video_flags=MediaStream.IGNORE,
+        audio_flags=MediaStream.REQUIRED
+      ))
+
+      # TODO: Replace with client.send_playing()
+      await client.send_status(
+        chat_id, client.ui({})['playing'].format(_next[0], _next[1]))
+
+    except (NoAudioSourceFound, YtDlpError, FFmpegError, FileNotFoundError):
+      return await self.player_next(chat_id)
+
+    except:
+      # TODO: report error
+      client._ustorage.clean_playlist(chat_id)
+
+  async def player_stop(self, chat_id: int) -> None:
+    pass
+
+  async def player_resume(self, chat_id: int) -> None:
+    pass
+
+  async def player_enqueue(self, chat_id: int, url: str) -> None:
+    pass
+
+  async def player_playing(self, chat_id: int, url: str) -> None:
+    pass
 
   async def send_status(self, message: Union[Message, int], *args, **kwargs) -> Message:
     chat_id: int
@@ -116,47 +223,10 @@ async def play(client, message) -> None:
     return
 
   ctx: str = message.text.split(' ', 1)[1]
-  try:
-    await callapi.get_active_call(message.chat.id)
-    # TODO: Validate url & inform user
-    client._ustorage.playlist_enqueue(message.chat.id, ctx)
+  if not vurl(ctx):
+    await client.send_status(message, client.ui(message)['invalid_url'])
     return
-
-  except GroupCallNotFound:
-    pass
-
-  info: Message = \
-    await client.send_status(message, client.ui(message)['joining_voice'])
-  try:
-    await userbot.get_chat(message.chat.id)
-
-  except ChannelInvalid:
-    await info.edit_text(client.ui(message)['generating_link'])
-
-    link: ChatInviteLink
-    try:
-      link = await client.create_chat_invite_link(
-        message.chat.id, name='RadioBot Link', member_limit=1)
-
-    except ChatAdminRequired:
-      await info.edit_text(client.ui(messagae)['cant_generate_link'])
-      return
-
-    try:
-      await info.edit_text(client.ui(message)['joining_chat'])
-      await userbot.join_chat(link.invite_link)
-
-    except InviteHashExpired:
-      await info.edit_text(client.ui(message)['cant_join_chat'])
-      return
-
-  # TODO: Detect whether group call is inactive or else
-  await callapi.join_group_call(message.chat.id, MediaStream(
-    ctx, video_flags=MediaStream.IGNORE,
-    audio_flags=MediaStream.REQUIRED
-  ))
-
-  await info.edit_text(client.ui(message)['playing'].format(0, ctx))
+  await client.player_play(message, ctx)
 
 
 @client.on_message(filters.command('pause') & ~storage.ChatLocked)
@@ -177,6 +247,19 @@ async def resume(client, message) -> None:
   try:
     await callapi.resume_stream(message.chat.id)
     await client.send_status(message, client.ui(message)['resumed'])
+
+  except NotInGroupCallError:
+    await client.send_status(message, client.ui(message)['not_in_voice'])
+    return
+
+
+@client.on_message(filters.command('next') & ~storage.ChatLocked)
+@storage.UseLock(NEXT_LOCK_LEVEL)
+async def cnext(client, message) -> None:
+  try:
+    await callapi.pause_stream(message.chat.id)
+    await client.player_next(message.chat.id)
+    await callapi.resume_stream(message.chat.id)
 
   except NotInGroupCallError:
     await client.send_status(message, client.ui(message)['not_in_voice'])
@@ -220,50 +303,35 @@ async def status(client, message) -> None:
 
 
 @callapi.on_stream_end()
-async def next_callback(_: PyTgCalls, update: Update) -> None:
+async def next_callback(
+  _: PyTgCalls, update: Update, locked: bool = False
+) -> None:
   chat_id: int = update.chat_id
   i: int = 0
-  while client._ustorage.is_locked(chat_id) and i <= NEXT_RETRY_COUNT:
-    await asyncio.sleep(NEXT_SLEEP)
-    i += 1
 
-  if i - 1 == NEXT_RETRY_COUNT:
-    return
+  if not locked:
+    lock_level: int = client._ustorage.get_lock_level(chat_id)
+    while lock_level > 0 and i <= NEXT_RETRY_COUNT:
+      if lock_level == NEXT_LOCK_LEVEL:
+        return
 
-  _id: int = client._ustorage.lock_chat(chat_id)
-  await asyncio.sleep(0.1)
-  if _id != client._ustorage.get_lock_time(chat_id):
-    await asyncio.sleep(1)
-    next_callback(_, update)
-    return  # Another method is running
+      await asyncio.sleep(NEXT_SLEEP)
+      lock_level = client._ustorage.get_lock_level(chat_id)
+      i += 1
 
-  _next: Tuple[int, str] = client._ustorage.playlist_dequeue(chat_id)
-  if not _next:
-    try:
-      await callapi.leave_group_call(chat_id)
-    except (NoActiveGroupCall, NotInGroupCallError):
+    if i - 1 == NEXT_RETRY_COUNT:
       return
-    await client.send_status(chat_id, client.ui({})['stream_ended'])
-    return
 
-  try:
-    await callapi.change_stream(chat_id, MediaStream(
-      _next[1], video_flags=MediaStream.IGNORE,
-      audio_flags=MediaStream.REQUIRED
-    ))
+    _id: int = client._ustorage.lock_chat(chat_id)
+    await asyncio.sleep(0.1)
+    if _id != client._ustorage.get_lock_time(chat_id):
+      await asyncio.sleep(1)
+      next_callback(_, update)
+      return  # Another method is running
 
-    # TODO: Replace with client.send_playing()
-    await client.send_status(
-      chat_id, client.ui({})['playing'].format(_next[0], _next[1]))
-
-  except (NoAudioSourceFound, YtDlpError, FFmpegError, FileNotFoundError):
+  await client.player_next(chat_id)
+  if not locked:
     client._ustorage.unlock_chat(chat_id)
-    return await next_callback(_, update)
-
-  except:
-    # TODO: Implement this & throw error
-    client._ustorage.clean_playlist(chat_id)
-  client._ustorage.unlock_chat(chat_id)
 
 
 client.start()

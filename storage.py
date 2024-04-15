@@ -175,13 +175,19 @@ def ChatLockedBetween(left: int, right: int) -> Callable:
 def UseLock(lock_level: int = 1) -> Callable:
   def decorator(method: Callable) -> Callable:
     async def new_method(*args, **kwargs) -> Any:
+      is_locked: bool = False
+      if 'locked' in kwargs:
+        is_locked = kwargs['locked'] == True
+
       chat_id: int = args[0].ExtractChatID(args[1])
-      _id: int = args[0]._ustorage.lock_chat(chat_id, lock_level)
-      await asyncio.sleep(0.1)
-      if _id != args[0]._ustorage.get_lock_time(chat_id):
-        return  # Another method is running
+      if not is_locked:
+        _id: int = args[0]._ustorage.lock_chat(chat_id, lock_level)
+        await asyncio.sleep(0.1)
+        if _id != args[0]._ustorage.get_lock_time(chat_id):
+          return  # Another method is running
       await method(*args, **kwargs)
-      args[0]._ustorage.unlock_chat(ExtractChatID(args[1]))
+      if not is_locked:
+        args[0]._ustorage.unlock_chat(ExtractChatID(args[1]))
     new_method.__name__ = '_locked_' + method.__name__
     return new_method
   return decorator
