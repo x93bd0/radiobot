@@ -9,8 +9,8 @@
     "stream_ended": "🔚 Reproducción finalizada",
     "volume_set_to": "🔊 Volumen establecido al {}%\n⚠️ Tenga en cuenta que este comando puede fallar por un bug de Telegram",
 
-    "joining_voice": "⏳ Uniendóse al chat de voz...",
-    "joining_chat": "⏳ Uniendóse al chat...",
+    "joining_voice": "⏳ Uniéndose al chat de voz...",
+    "joining_chat": "⏳ Uniéndose al chat...",
     "generating_link": "⏳ Generando invitación al chat...",
 
     "no_payload_play": "❌ El comando `/play` no puede ser usado sin ninguna URL",
