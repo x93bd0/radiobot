@@ -6,16 +6,22 @@ from pytgcalls.exceptions import (
   NoActiveGroupCall
 )
 
-from pyrogram.errors.exceptions.bad_request_400 import ChatAdminRequired, ChannelInvalid, InviteHashExpired
+from pyrogram.errors.exceptions.bad_request_400 import (
+  ChatAdminRequired,
+  ChannelInvalid,
+  InviteHashExpired,
+  MessageNotModified
+)
+
 from pytgcalls.types import MediaStream, AudioQuality, Update
 from pyrogram.types import ChatInviteLink, Message
-from typing import Self, Dict, Any, Callable
+from typing import Self, Dict, Any, Callable, Union
 from pyrogram import Client, filters, idle
 from ntgcalls import FFmpegError
 from pytgcalls import PyTgCalls
+import asyncio
 import storage
 import json
-import time
 import os
 
 
@@ -23,10 +29,12 @@ import os
 # TODO: Protect from accesing files
 # TODO: Implement playlist limit
 # TODO: Implement permissions
+# TODO: Implement group language
 
 
 NEXT_RETRY_COUNT: int = 15
 NEXT_SLEEP: float = 0.5
+MSGID_THREESHOLD: int = 5
 
 
 class CustomClient(Client):
@@ -44,7 +52,38 @@ class CustomClient(Client):
       return default
     if not hasattr(message.from_user, 'language_code'):
       return default
-    return message.from_user.language_code
+
+    lc: str = message.from_user.language_code
+    if lc not in self.pseudo_ui:
+      return default
+    return lc
+
+  async def send_status(self, message: Union[Message, int], *args, **kwargs) -> Message:
+    chat_id: int
+    _id: int
+
+    if isinstance(message, int):
+      chat_id = message
+      _id = -1
+
+    elif isinstance(message, Message):
+      chat_id = message.chat.id
+      _id = message.id
+
+    else:
+      raise Exception('Programming error!')
+
+    last: int = self._ustorage.get_last_statusmsg(chat_id)
+    if last == -1 or (_id != -1 and (_id - last) > MSGID_THREESHOLD):
+      newmsg: Message = await self.send_message(chat_id, *args, **kwargs)
+      self._ustorage.set_last_statusmsg(chat_id, newmsg.id)
+      return newmsg
+
+    try:
+      return await self.edit_message_text(chat_id, last, *args, **kwargs)
+
+    except MessageNotModified:
+      return Message(id=last)
 
 
 userbot: Client = Client(
@@ -69,17 +108,17 @@ async def help(client, message) -> None:
   pass
 
 
-@client.on_message(filters.command('play'))
+@client.on_message(filters.command('play') & ~storage.ChatLocked)
 @storage.UseLock()
 async def play(client, message) -> None:
   if message.text.count(' ') == 0:
-    await message.reply(client.ui(message)['no_payload_play'])
+    await client.send_status(message, client.ui(message)['no_payload_play'])
     return
 
   ctx: str = message.text.split(' ', 1)[1]
   try:
     await callapi.get_active_call(message.chat.id)
-    # TODO: Validate url
+    # TODO: Validate url & inform user
     client._ustorage.playlist_enqueue(message.chat.id, ctx)
     return
 
@@ -87,7 +126,7 @@ async def play(client, message) -> None:
     pass
 
   info: Message = \
-    await message.reply(client.ui(message)['joining_voice'])
+    await client.send_status(message, client.ui(message)['joining_voice'])
   try:
     await userbot.get_chat(message.chat.id)
 
@@ -117,62 +156,64 @@ async def play(client, message) -> None:
     audio_flags=MediaStream.REQUIRED
   ))
 
-  await info.edit_text(client.ui(message)['playing'].format(ctx))
+  await info.edit_text(client.ui(message)['playing'].format(0, ctx))
 
 
-@client.on_message(filters.command('pause'))
+@client.on_message(filters.command('pause') & ~storage.ChatLocked)
 @storage.UseLock()
 async def pause(client, message) -> None:
   try:
     await callapi.pause_stream(message.chat.id)
-    await message.reply(client.ui(message)['paused'])
+    await client.send_status(message, client.ui(message)['paused'])
 
   except NotInGroupCallError:
-    await message.reply(client.ui(message)['not_in_voice'])
+    await client.send_status(message, client.ui(message)['not_in_voice'])
     return
 
 
-@client.on_message(filters.command('resume'))
+@client.on_message(filters.command('resume') & ~storage.ChatLocked)
 @storage.UseLock()
 async def resume(client, message) -> None:
   try:
     await callapi.resume_stream(message.chat.id)
-    await message.reply(client.ui(message)['resumed'])
+    await client.send_status(message, client.ui(message)['resumed'])
 
   except NotInGroupCallError:
-    await message.reply(client.ui(message)['not_in_voice'])
+    await client.send_status(message, client.ui(message)['not_in_voice'])
     return
 
 
-@client.on_message(filters.command('volume'))
+@client.on_message(filters.command('volume') & ~storage.ChatLocked)
 @storage.UseLock()
 async def volume(client, message) -> None:
   if message.text.count(' ') == 0:
-    raise Exception('Change me! Invalid volume parameter')
+    await client.send_status(message, client.ui(message)['volume_valueerror'])
+    return
 
   ctx: str = message.text.split(' ', 1)[1]
   try:
     await callapi.change_volume_call(message.chat.id, int(ctx))
-    await message.reply(client.ui(message)['volume_set_to'].format(int(ctx)))
+    await client.send_status(message, client.ui(message)['volume_set_to'].format(int(ctx)))
 
   except ValueError:
-    await message.reply(client.ui(message)['volume_valueerror'])
+    await client.send_status(message, client.ui(message)['volume_valueerror'])
 
-  except (NotInGroupCallError, NoActiveGroupCall):
-    await message.reply(client.ui(message)['not_in_voice'])
+  except (NotInGroupCallError, NoActiveGroupCall, AttributeError):
+    await client.send_status(message, client.ui(message)['not_in_voice'])
 
 
-@client.on_message(filters.command('stop'))
+@client.on_message(filters.command('stop') & ~storage.ChatLocked)
+@storage.UseLock()
 async def stop(client, message) -> None:
   try:
     await callapi.leave_group_call(message.chat.id)
-    await message.reply(client.ui(message)['stopped'])
+    await client.send_status(message, client.ui(message)['stopped'])
   except (NoActiveGroupCall, NotInGroupCallError):
     await message.reply(client.ui(message)['not_in_voice'])
   client._ustorage.clean_playlist(message.chat.id)
 
 
-@client.on_message(filters.command('status'))
+@client.on_message(filters.command('status') & ~storage.ChatLocked)
 @storage.UseLock()
 async def status(client, message) -> None:
   pass
@@ -183,32 +224,37 @@ async def next_callback(_: PyTgCalls, update: Update) -> None:
   chat_id: int = update.chat_id
   i: int = 0
   while client._ustorage.is_locked(chat_id) and i <= NEXT_RETRY_COUNT:
-    time.sleep(NEXT_SLEEP)  # TODO: may fail
+    await asyncio.sleep(NEXT_SLEEP)
     i += 1
 
   if i - 1 == NEXT_RETRY_COUNT:
     return
 
   _id: int = client._ustorage.lock_chat(chat_id)
-  time.sleep(0.1)
+  await asyncio.sleep(0.1)
   if _id != client._ustorage.get_lock_time(chat_id):
-    time.sleep(1)
+    await asyncio.sleep(1)
     next_callback(_, update)
     return  # Another method is running
 
-  _next: str = client._ustorage.playlist_dequeue(chat_id)
+  _next: Tuple[int, str] = client._ustorage.playlist_dequeue(chat_id)
   if not _next:
     try:
       await callapi.leave_group_call(chat_id)
     except (NoActiveGroupCall, NotInGroupCallError):
       return
-    return  # TODO: Say 'stream ended'
+    await client.send_status(chat_id, client.ui({})['stream_ended'])
+    return
 
   try:
     await callapi.change_stream(chat_id, MediaStream(
-      _next, video_flags=MediaStream.IGNORE,
+      _next[1], video_flags=MediaStream.IGNORE,
       audio_flags=MediaStream.REQUIRED
     ))
+
+    # TODO: Replace with client.send_playing()
+    await client.send_status(
+      chat_id, client.ui({})['playing'].format(_next[0], _next[1]))
 
   except (NoAudioSourceFound, YtDlpError, FFmpegError, FileNotFoundError):
     client._ustorage.unlock_chat(chat_id)
