@@ -116,7 +116,7 @@ class TemporaryStorage:
     cursor: sqlite3.Cursor = self._db.cursor()
     cursor.execute(
       'select song_url, time, song_author, song_name from playlist where chat_id = ? limit 1', (chat_id,))
-    act: Optional[Tuple[int, int, str, str]] = cursor.fetchone()
+    act: Optional[Tuple[str, int, str, str]] = cursor.fetchone()
     if not act:
       return None
     return (
@@ -130,8 +130,8 @@ class TemporaryStorage:
     cursor: sqlite3.Cursor = self._db.cursor()
     cursor.execute(
       'select song_url, time, song_author, song_name from playlist where chat_id = ? limit 2', (chat_id,))
-    bef: Optional[Tuple[int, int, str, str]] = cursor.fetchone()
-    ret: Optional[Tuple[int, int, str, str]] = cursor.fetchone()
+    bef: Optional[Tuple[str, int, str, str]] = cursor.fetchone()
+    ret: Optional[Tuple[str, int, str, str]] = cursor.fetchone()
 
     if not bef or not ret:
       self._db.execute(

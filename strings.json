@@ -22,7 +22,11 @@
     "cant_join_chat": "❌ El usuario ´Player´ no se puede unir al chat\nℹ️ Si el usuario fue baneado previamente del chat, se le debe eliminar de la lista de usuarios baneados",
 
     "volume_valueerror": "❌ El valor del volumen debe ser un número entre el 1 y el 200",
-    "invalid_url": "❌ La URL del audio es inválida"
+    "invalid_url": "❌ La URL del audio es inválida",
+
+    "songfmt_wauthor": "╠ 🎼 #{0} [“{3}” de “{2}”]({1})",
+    "songfmt_nauthor": "╠ 🎼 #{0} [“Audio”]({1})",
+    "playlistfmt": "╔═ 🎧 Lista de reproducción actual\n{}╚═"
   },
 
   "en": {
