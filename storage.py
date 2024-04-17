@@ -63,12 +63,12 @@ class TemporaryStorage:
       'delete from lock_data where chat_id=?', (chat_id,))
 
 
-  def fetch_playlist(self, chat_id: int, limit: int = 10) -> List[Tuple[int, int, str, str]]:
+  def fetch_playlist(self, chat_id: int, limit: int = 10) -> List[Tuple[str, int, str, str]]:
     cursor: sqlite3.Cursor = self._db.cursor()
     cursor.execute(
       'select song_url, time, song_author, song_name from playlist where chat_id = ? limit ?',
       (chat_id, limit))
-    ret: Optional[List[Tuple[int, int, str, str]]] = cursor.fetchall()
+    ret: Optional[List[Tuple[str, int, str, str]]] = cursor.fetchall()
     if not ret:
       return []
     return ret
@@ -95,10 +95,9 @@ class TemporaryStorage:
   ) -> int:
     plsize: int = self.playlist_size(chat_id)
     if plsize == 0:
-      plsize = 1
       self._db.execute(
         'insert into plsize values (?, ?)',
-        (chat_id, 2))
+        (chat_id, 1))
 
     else:
       self._db.execute(
@@ -111,20 +110,38 @@ class TemporaryStorage:
       (chat_id, url, author, name, time.time()))
     return plsize
 
-  def playlist_dequeue(
+  def playlist_actual(
     self, chat_id: int
   ) -> Optional[Tuple[int, str, str, str]]:
     cursor: sqlite3.Cursor = self._db.cursor()
     cursor.execute(
       'select song_url, time, song_author, song_name from playlist where chat_id = ? limit 1', (chat_id,))
+    act: Optional[Tuple[int, int, str, str]] = cursor.fetchone()
+    if not act:
+      return None
+    return (
+      self.playlist_size(chat_id) - self.playlist_dsize(chat_id),
+      ret[0], ret[2], ret[3]
+    )
+
+  def playlist_dequeue(
+    self, chat_id: int
+  ) -> Optional[Tuple[int, str, str, str]]:
+    cursor: sqlite3.Cursor = self._db.cursor()
+    cursor.execute(
+      'select song_url, time, song_author, song_name from playlist where chat_id = ? limit 2', (chat_id,))
+    bef: Optional[Tuple[int, int, str, str]] = cursor.fetchone()
     ret: Optional[Tuple[int, int, str, str]] = cursor.fetchone()
-    if not ret:
+
+    if not bef or not ret:
       self._db.execute(
         'delete from plsize where chat_id = ?', (chat_id,))
       return None
+
     self._db.execute(
       'delete from playlist where chat_id = ? and time = ?',
-      (chat_id, ret[1]))
+      (chat_id, bef[1]))
+
     return (
       self.playlist_size(chat_id) - self.playlist_dsize(chat_id),
       ret[0], ret[2], ret[3]
@@ -195,7 +212,14 @@ def UseLock(lock_level: int = 1) -> Callable:
         await asyncio.sleep(0.1)
         if _id != args[0]._ustorage.get_lock_time(chat_id):
           return  # Another method is running
-      await method(*args, **kwargs)
+
+      try:
+        await method(*args, **kwargs)
+
+      except Exception as e:
+        # TODO: Capture error
+        print('Unhandled exception', e)
+
       if not is_locked:
         args[0]._ustorage.unlock_chat(ExtractChatID(args[1]))
     new_method.__name__ = '_locked_' + method.__name__

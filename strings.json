@@ -46,6 +46,10 @@
     "cant_join_chat": "❌ Player can't join chat\nℹ️ Check if the player is banned from the chat, if so, unban it",
 
     "volume_valueerror": "❌ Volume must be an integer value between 1 and 200",
-    "invalid_url": "❌ Invalid audio URL"
+    "invalid_url": "❌ Invalid audio URL",
+
+    "songfmt_wauthor": "╠ 🎼 #{0} [“{3}” by “{2}”]({1})",
+    "songfmt_nauthor": "╠ 🎼 #{0} [“Audio”]({1})",
+    "playlistfmt": "╔═ 🎧 Current playlist\n{}╚═"
   }
 }

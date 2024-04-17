@@ -31,6 +31,7 @@ import os
 # TODO: Implement playlist limit
 # TODO: Implement permissions
 # TODO: Implement group language
+# TODO: Implement player_* methods
 # TODO: Implement playing from telegram audios
 # TODO: Improve playing/enqueued messages
 
@@ -38,7 +39,7 @@ import os
 NEXT_LOCK_LEVEL:       int = 2
 NEXT_RETRY_COUNT:      int = 15
 NEXT_SLEEP:          float = 0.5
-MSGID_THREESHOLD:      int = 5
+MSGID_THREESHOLD:      int = 3
 CHAT_INVITE_LINK_NAME: str = 'RadioBot User'
 
 
@@ -80,17 +81,17 @@ class CustomClient(Client):
 
     try:
       await callapi.get_active_call(cid)
-      idx: int = client._ustorage.playlist_enqueue(
+      idx: int = self._ustorage.playlist_enqueue(
         cid, url)
-      await client.send_status(
-        message, client.ui(message)['enqueued'].format(idx, url))
+      await self.send_status(
+        message, self.ui(message)['enqueued'].format(idx, url))
       return
 
     except GroupCallNotFound:
       pass
 
     info: Message = \
-      await client.send_status(message, client.ui(message)['joining_voice'])
+      await self.send_status(message, client.ui(message)['joining_voice'])
     try:
       await userbot.get_chat(cid)
 
@@ -125,6 +126,7 @@ class CustomClient(Client):
       return
 
     await info.edit_text(client.ui(message)['playing'].format(0, url))
+    self._ustorage.playlist_enqueue(cid, url)
 
   # TODO: Support message input
   async def player_next(self, chat_id: int) -> None:
@@ -184,6 +186,9 @@ class CustomClient(Client):
 
     last: int = self._ustorage.get_last_statusmsg(chat_id)
     if last == -1 or (_id != -1 and (_id - last) > MSGID_THREESHOLD):
+      if last != -1:
+        await self.delete_messages(chat_id, last)
+
       newmsg: Message = await self.send_message(chat_id, *args, **kwargs)
       self._ustorage.set_last_statusmsg(chat_id, newmsg.id)
       return newmsg
@@ -209,7 +214,7 @@ client: CustomClient = CustomClient(
 
 @client.on_message(filters.command('start'))
 async def start(client, message) -> None:
-  await message.reply_text('Prueba')
+  pass
 
 
 @client.on_message(filters.command('help'))
@@ -300,6 +305,32 @@ async def stop(client, message) -> None:
 @storage.UseLock()
 async def status(client, message) -> None:
   pass
+
+
+@client.on_message(filters.command('playlist'))
+async def playlist(client, message) -> None:
+  size: int = client._ustorage.playlist_size(message.chat.id)
+  if size == 0:
+    await client.send_status(message, client.ui(message)['not_in_voice'])
+    return
+
+  pidx: int = client._ustorage.playlist_dsize(message.chat.id)
+  songs: List[str, int, str, str] = \
+    client._ustorage.fetch_playlist(message.chat.id, 10)
+
+  o_songs: str = ""
+  i: int = 0
+  for song in songs:
+    if song[2] != '' or song[3] != '':
+      o_songs += client.ui(message)['songfmt_wauthor'].format(
+        size - pidx + i + 1, song[0], song[2], song[3]) + '\n'
+
+    else:
+      o_songs += client.ui(message)['songfmt_nauthor'].format(
+        size - pidx + i + 1, song[0]) + '\n'
+    i += 1
+
+  await message.reply(client.ui(message)['playlistfmt'].format(o_songs))
 
 
 @callapi.on_stream_end()
