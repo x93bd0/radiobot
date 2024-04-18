@@ -2,3 +2,4 @@ pyrogram
 tgcrypto
 yt-dlp
 validators
+py-tgcalls

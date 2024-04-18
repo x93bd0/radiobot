@@ -2,7 +2,7 @@ from pytgcalls.exceptions import (
   GroupCallNotFound,
   NoAudioSourceFound,
   YtDlpError,
-  NotInGroupCallError,
+  NotInCallError,
   NoActiveGroupCall
 )
 
@@ -14,16 +14,20 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 )
 
 from pytgcalls.types import MediaStream, AudioQuality, Update
+from pytgcalls import PyTgCalls, filters as pfilters
 from pyrogram.types import ChatInviteLink, Message
 from typing import Self, Dict, Any, Callable, Union
 from pyrogram import Client, filters, idle
 from validators import url as vurl
 from ntgcalls import FFmpegError
-from pytgcalls import PyTgCalls
 import asyncio
 import storage
 import json
 import os
+
+if 'DEBUG' in os.environ:
+  import tracemalloc
+  tracemalloc.start()
 
 
 # TODO: Implement status command
@@ -34,6 +38,8 @@ import os
 # TODO: Implement player_* methods
 # TODO: Implement playing from telegram audios
 # TODO: Improve playing/enqueued messages
+# TODO: Improve strings with ascii art
+# TODO: Add song_time to playlist storage
 
 
 NEXT_LOCK_LEVEL:       int = 2
@@ -64,6 +70,13 @@ class CustomClient(Client):
       return default
     return lc
 
+  def to_strtime(self, time: int) -> str:
+    # TODO: Test
+    if time > 59 * 60 + 60:
+      return '{:0>2}:{:0>2}:{:0>2}'.format(
+        int(time / 3600), int((time % 3600) / 60), int((time % 3600) % 60))
+    return '{:0>2}:{:0>2}'.format(int(time / 60), int(time % 60))
+
   async def player_play(self, chat_id: Union[Message, int], url: str) -> None:
     message: Message
     cid: int
@@ -79,16 +92,12 @@ class CustomClient(Client):
     else:
       raise Exception('Programming error!')
 
-    try:
-      await callapi.get_active_call(cid)
+    if cid in (await callapi.calls):
       idx: int = self._ustorage.playlist_enqueue(
         cid, url)
       await self.send_status(
         message, self.ui(message)['enqueued'].format(idx, url))
       return
-
-    except GroupCallNotFound:
-      pass
 
     info: Message = \
       await self.send_status(message, client.ui(message)['joining_voice'])
@@ -116,32 +125,32 @@ class CustomClient(Client):
         return
 
     try:
-      await callapi.join_group_call(cid, MediaStream(
-        url, video_flags=MediaStream.IGNORE,
-        audio_flags=MediaStream.REQUIRED
+      await callapi.play(cid, MediaStream(
+        url, video_flags=MediaStream.Flags.IGNORE,
+        audio_flags=MediaStream.Flags.REQUIRED
       ))
 
     except ChatAdminRequired:
       await info.edit_text(client.ui(message)['no_chat'])
       return
 
-    await info.edit_text(client.ui(message)['playing'].format(0, url))
     self._ustorage.playlist_enqueue(cid, url)
+    await info.edit_text(client.ui(message)['playing'].format(0, url))
 
   # TODO: Support message input
   async def player_next(self, chat_id: int) -> None:
     _next: Optional[Tuple[int, str, str, str]] = client._ustorage.playlist_dequeue(chat_id)
     if not _next:
       try:
-        await callapi.leave_group_call(chat_id)
-      except (NoActiveGroupCall, NotInGroupCallError):
+        await callapi.leave_call(chat_id)
+      except (NoActiveGroupCall, NotInCallError):
         return
 
       await client.send_status(chat_id, client.ui({})['stream_ended'])
       return
 
     try:
-      await callapi.change_stream(chat_id, MediaStream(
+      await callapi.play(chat_id, MediaStream(
         _next[1], video_flags=MediaStream.IGNORE,
         audio_flags=MediaStream.REQUIRED
       ))
@@ -200,6 +209,8 @@ class CustomClient(Client):
       return Message(id=last)
 
 
+
+
 userbot: Client = Client(
   name=os.environ['CLIENT_NAME'] + '_userbot',
   api_id=int(os.environ['TG_API_ID']),
@@ -243,7 +254,7 @@ async def pause(client, message) -> None:
     await callapi.pause_stream(message.chat.id)
     await client.send_status(message, client.ui(message)['paused'])
 
-  except NotInGroupCallError:
+  except NotInCallError:
     await client.send_status(message, client.ui(message)['not_in_voice'])
     return
 
@@ -255,7 +266,7 @@ async def resume(client, message) -> None:
     await callapi.resume_stream(message.chat.id)
     await client.send_status(message, client.ui(message)['resumed'])
 
-  except NotInGroupCallError:
+  except NotInCallError:
     await client.send_status(message, client.ui(message)['not_in_voice'])
     return
 
@@ -266,7 +277,7 @@ async def cnext(client, message) -> None:
   try:
     await client.player_next(message.chat.id)
 
-  except NotInGroupCallError:
+  except NotInCallError:
     await client.send_status(message, client.ui(message)['not_in_voice'])
     return
 
@@ -286,7 +297,7 @@ async def volume(client, message) -> None:
   except ValueError:
     await client.send_status(message, client.ui(message)['volume_valueerror'])
 
-  except (NotInGroupCallError, NoActiveGroupCall, AttributeError):
+  except (NotInCallError, NoActiveGroupCall, AttributeError):
     await client.send_status(message, client.ui(message)['not_in_voice'])
 
 
@@ -294,9 +305,9 @@ async def volume(client, message) -> None:
 @storage.UseLock()
 async def stop(client, message) -> None:
   try:
-    await callapi.leave_group_call(message.chat.id)
+    await callapi.leave_call(message.chat.id)
     await client.send_status(message, client.ui(message)['stopped'])
-  except (NoActiveGroupCall, NotInGroupCallError):
+  except (NoActiveGroupCall, NotInCallError):
     await message.reply(client.ui(message)['not_in_voice'])
   client._ustorage.clean_playlist(message.chat.id)
 
@@ -304,7 +315,35 @@ async def stop(client, message) -> None:
 @client.on_message(filters.command('status') & ~storage.ChatLocked)
 @storage.UseLock()
 async def status(client, message) -> None:
-  pass
+  data: Optional[Tuple[str, int, str, str]]
+  elapsed: int
+
+  try:
+    elapsed = await callapi.played_time(message.chat.id)
+    data = client._ustorage.playlist_actual(message.chat.id)
+
+    if not data:
+      raise NotInCallError()
+
+  except NotInCallError:
+    await client.send_status(message, client.ui(message)['not_in_voice'])
+    return
+
+  strings: Dict[str, str] = client.ui(message)
+  song: str
+
+  if data[2] != '' or data[3] != '':
+    song = strings['songfmt_wauthor'].format(
+      data[0], data[1],
+      data[2] or strings['no_author'],
+      data[3] or strings['no_title'])
+
+  else:
+    song = strings['songfmt_nauthor'].format(
+      data[0], data[1])
+
+  await client.send_status(message, strings['statusfmt'].format(
+    song, client.to_strtime(elapsed)))
 
 
 @client.on_message(filters.command('playlist'))
@@ -317,23 +356,26 @@ async def playlist(client, message) -> None:
   pidx: int = client._ustorage.playlist_dsize(message.chat.id)
   songs: List[str, int, str, str] = \
     client._ustorage.fetch_playlist(message.chat.id, 10)
+  strings: Dict[str, str] = client.ui(message)
 
   o_songs: str = ""
   i: int = 0
   for song in songs:
     if song[2] != '' or song[3] != '':
-      o_songs += client.ui(message)['songfmt_wauthor'].format(
-        size - pidx + i + 1, song[0], song[2], song[3]) + '\n'
+      o_songs += strings['songfmt_wauthor'].format(
+        size - pidx + i + 1, song[0],
+        song[2] or strings['no_author'],
+        song[3] or strings['no_title']) + '\n'
 
     else:
-      o_songs += client.ui(message)['songfmt_nauthor'].format(
+      o_songs += strings['songfmt_nauthor'].format(
         size - pidx + i + 1, song[0]) + '\n'
     i += 1
 
-  await message.reply(client.ui(message)['playlistfmt'].format(o_songs))
+  await message.reply(strings['playlistfmt'].format(o_songs))
 
 
-@callapi.on_stream_end()
+@callapi.on_update(pfilters.stream_end)
 async def next_callback(
   _: PyTgCalls, update: Update, locked: bool = False
 ) -> None:
@@ -363,6 +405,8 @@ async def next_callback(
   await client.player_next(chat_id)
   if not locked:
     client._ustorage.unlock_chat(chat_id)
+
+
 
 
 client.start()

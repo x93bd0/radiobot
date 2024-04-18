@@ -1,5 +1,6 @@
 from typing import Self, Optional, Tuple, Any, Callable, List
 from pyrogram import filters, Client
+import traceback
 import asyncio
 import sqlite3
 import time
@@ -116,8 +117,8 @@ class TemporaryStorage:
     cursor: sqlite3.Cursor = self._db.cursor()
     cursor.execute(
       'select song_url, time, song_author, song_name from playlist where chat_id = ? limit 1', (chat_id,))
-    act: Optional[Tuple[str, int, str, str]] = cursor.fetchone()
-    if not act:
+    ret: Optional[Tuple[str, int, str, str]] = cursor.fetchone()
+    if not ret:
       return None
     return (
       self.playlist_size(chat_id) - self.playlist_dsize(chat_id),
@@ -218,6 +219,7 @@ def UseLock(lock_level: int = 1) -> Callable:
 
       except Exception as e:
         # TODO: Capture error
+        print(traceback.format_exc())
         print('Unhandled exception', e)
 
       if not is_locked:
