@@ -17,7 +17,7 @@ from typing import Self, Dict, Any, Callable, Union, Optional, Tuple
 from pytgcalls.types import MediaStream, AudioQuality, Update
 from pytgcalls import PyTgCalls, filters as pfilters
 from pyrogram.types import ChatInviteLink, Message
-from pyrogram import Client, filters, idle
+from pyrogram import Client, filters, idle, enums
 from validators import url as vurl
 from ntgcalls import FFmpegError
 import traceback
@@ -80,6 +80,14 @@ class CustomClient(Client):
     elif isinstance(message, Message):
       return (message, message.chat.id)
     raise Exception('Programming Error!')
+
+  async def whitelisted(self, chat_id: int, user_id: int) -> bool:
+    # TODO: cache response
+    async for admin in self.get_chat_members(
+        chat_id, filter=enums.ChatMembersFilter.ADMINISTRATORS):
+      if hasattr(admin, 'user') and admin.user.id == user_id:
+        return True
+    return False
 
   async def player_play(self, chat_id: Union[Message, int], url: str) -> None:
     message: Optional[Message]
@@ -245,6 +253,12 @@ class CustomClient(Client):
 
 
 
+@filters.create
+async def Whitelisted(_, client: CustomClient, message: Message) -> bool:
+  return await client.whitelisted(message.chat.id, message.from_user.id)
+
+
+
 
 userbot: Client = Client(
   name=os.environ['CLIENT_NAME'] + '_userbot',
@@ -268,7 +282,7 @@ async def help(client, message) -> None:
   pass
 
 
-@client.on_message(filters.command('play') & ~storage.ChatLocked)
+@client.on_message(filters.command('play') & ~storage.ChatLocked & Whitelisted)
 @storage.UseLock()
 async def play(client, message) -> None:
   if message.text.count(' ') == 0:
@@ -282,7 +296,7 @@ async def play(client, message) -> None:
   await client.player_play(message, ctx)
 
 
-@client.on_message(filters.command('pause') & ~storage.ChatLocked)
+@client.on_message(filters.command('pause') & ~storage.ChatLocked & Whitelisted)
 @storage.UseLock()
 async def pause(client, message) -> None:
   try:
@@ -294,7 +308,7 @@ async def pause(client, message) -> None:
     return
 
 
-@client.on_message(filters.command('resume') & ~storage.ChatLocked)
+@client.on_message(filters.command('resume') & ~storage.ChatLocked & Whitelisted)
 @storage.UseLock()
 async def resume(client, message) -> None:
   try:
@@ -306,7 +320,7 @@ async def resume(client, message) -> None:
     return
 
 
-@client.on_message(filters.command('next') & ~storage.ChatLocked)
+@client.on_message(filters.command('next') & ~storage.ChatLocked & Whitelisted)
 @storage.UseLock(NEXT_LOCK_LEVEL)
 async def cnext(client, message) -> None:
   try:
@@ -317,7 +331,7 @@ async def cnext(client, message) -> None:
     return
 
 
-@client.on_message(filters.command('volume') & ~storage.ChatLocked)
+@client.on_message(filters.command('volume') & ~storage.ChatLocked & Whitelisted)
 @storage.UseLock()
 async def volume(client, message) -> None:
   if message.text.count(' ') == 0:
@@ -336,7 +350,7 @@ async def volume(client, message) -> None:
     await client.send_status(message, client.ui(message)['not_in_voice'])
 
 
-@client.on_message(filters.command('stop') & ~storage.ChatLocked)
+@client.on_message(filters.command('stop') & ~storage.ChatLocked & Whitelisted)
 @storage.UseLock()
 async def stop(client, message) -> None:
   try:
@@ -347,13 +361,13 @@ async def stop(client, message) -> None:
   client._ustorage.clean_playlist(message.chat.id)
 
 
-@client.on_message(filters.command('status') & ~storage.ChatLocked)
+@client.on_message(filters.command('status') & ~storage.ChatLocked & Whitelisted)
 @storage.UseLock()
 async def status(client, message) -> None:
   await client.player_playing(message)
 
 
-@client.on_message(filters.command('playlist'))
+@client.on_message(filters.command('playlist') & Whitelisted)
 async def playlist(client, message) -> None:
   size: int = client._ustorage.playlist_size(message.chat.id)
   if size == 0:
