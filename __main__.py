@@ -74,21 +74,18 @@ class CustomClient(Client):
         int(time / 3600), int((time % 3600) / 60), int((time % 3600) % 60))
     return '{:0>2}:{:0>2}'.format(int(time / 60), int(time % 60))
 
+  def cidnmsg(self, message: Union[Message, int]) -> Tuple[Optional[Message], int]:
+    if isinstance(message, int):
+      return (None, message)
+    elif isinstance(message, Message):
+      return (message, message.chat.id)
+    raise Exception('Programming Error!')
+
   async def player_play(self, chat_id: Union[Message, int], url: str) -> None:
     message: Optional[Message]
     cid: int
 
-    if isinstance(chat_id, int):
-      message = None
-      cid = chat_id
-
-    elif isinstance(chat_id, Message):
-      message = chat_id
-      cid = message.chat.id
-
-    else:
-      raise Exception('Programming error!')
-
+    message, cid = self.cidnmsg(chat_id)
     if cid in (await callapi.calls):
       idx: int = self._ustorage.playlist_enqueue(
         cid, url)
@@ -98,6 +95,7 @@ class CustomClient(Client):
 
     info: Message = \
       await self.send_status(message, client.ui(message or cid)['joining_voice'])
+
     try:
       await userbot.get_chat(cid)
 
@@ -131,7 +129,7 @@ class CustomClient(Client):
       await info.edit_text(client.ui(message)['no_chat'])
       return
 
-    except (NoAudioSourceFound, YtDlpError, FFmpegError, FileNotFoundError):
+    except (NoAudioSourceFound, YtDlpError, FFmpegError, FileNotFoundError, AttributeError):
       # TODO: Better error
       await info.edit_text("ERROR")
       return
@@ -145,19 +143,15 @@ class CustomClient(Client):
     if not _next:
       try:
         await callapi.leave_call(chat_id)
-
       except (NoActiveGroupCall, NotInCallError):
         pass
-
       await client.send_status(chat_id, client.ui({})['stream_ended'])
       return
 
     try:
       await callapi.play(chat_id, MediaStream(
         _next[1], video_flags=MediaStream.Flags.IGNORE,
-        audio_flags=MediaStream.Flags.REQUIRED
-      ))
-
+        audio_flags=MediaStream.Flags.REQUIRED))
       await self.player_playing(chat_id)
 
     except (NoAudioSourceFound, YtDlpError, FFmpegError, FileNotFoundError):
@@ -175,9 +169,6 @@ class CustomClient(Client):
   async def player_resume(self, chat_id: int) -> None:
     pass
 
-  async def player_enqueue(self, chat_id: int, url: str) -> None:
-    pass
-
   async def player_playing(
     self, message: Union[Message, int],
     data: Optional[Tuple[str, int, str, str]] = None
@@ -185,14 +176,8 @@ class CustomClient(Client):
     elapsed: int
     chat_id: int
 
-    if isinstance(message, int):
-      chat_id = message
-
-    elif isinstance(message, Message):
-      chat_id = message.chat.id
-
-    else:
-      raise Exception('Programming error!')
+    _, chat_id = self.cidnmsg(message)
+    strings: Dict[str, str] = client.ui(message)
 
     try:
       elapsed = await callapi.played_time(chat_id)
@@ -203,12 +188,11 @@ class CustomClient(Client):
         raise NotInCallError()
 
     except NotInCallError:
-      await client.send_status(message, client.ui(message)['not_in_voice'])
+      client._ustorage.clean_playlist(chat_id)
+      await client.send_status(message, strings['not_in_voice'])
       return
 
-    strings: Dict[str, str] = client.ui(message)
     song: str
-
     if data[2] != '' or data[3] != '':
       song = strings['songfmt_wauthor'].format(
         data[0], data[1],
@@ -224,7 +208,7 @@ class CustomClient(Client):
 
   async def send_status(self, message: Union[Message, int], *args, **kwargs) -> Message:
     chat_id: int
-    _id: int
+    _id: int = -1
 
     title: str
     if 'title' in kwargs:
@@ -240,16 +224,9 @@ class CustomClient(Client):
     else:
       kwargs['text'] = self.ui(message)['fmt'].format(title, kwargs['text'])
 
-    if isinstance(message, int):
-      chat_id = message
-      _id = -1
-
-    elif isinstance(message, Message):
-      chat_id = message.chat.id
+    message, chat_id = self.cidnmsg(message)
+    if message:
       _id = message.id
-
-    else:
-      raise Exception('Programming error!')
 
     last: int = self._ustorage.get_last_statusmsg(chat_id)
     if last == -1 or (_id != -1 and (_id - last) > MSGID_THREESHOLD):
