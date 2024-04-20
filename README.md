@@ -6,6 +6,7 @@ The bot itself is coded following [KISS](https://en.wikipedia.org/wiki/KISS_prin
 1. Normal player commands (/play, /stop, /next, /pause, /resume, /volume)
 2. Ability to play audio on channels (WIP)
 3. Whitelist for admins to allow non-admin people to take control over the bot commands (WIP)
+
 That's all the bot has to offer for now. Probably it will grow over time.
 
 # Dependencies
