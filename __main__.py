@@ -393,7 +393,7 @@ async def playlist(client, message) -> None:
         size - pidx + i + 1, song[0]) + '\n'
     i += 1
 
-  await message.reply(strings['playlistfmt'].format(o_songs))
+  await message.reply(strings['fmt'].format(strings['pltitle'], o_songs))
 
 
 @callapi.on_update(pfilters.stream_end)
