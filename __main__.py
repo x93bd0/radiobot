@@ -56,7 +56,9 @@ class CustomClient(Client):
 
     with open('strings.json', 'r') as _ui:
       self.pseudo_ui: Dict[str, Any] = json.load(_ui)
-    self.ui: Callable = lambda message: self.pseudo_ui[self._extract_language(message)]
+    self.ui: Callable = lambda message: \
+      self.pseudo_ui.get(self._extract_language(message),
+        self.pseudo_ui[self.pseudo_ui['default']])
 
   def _extract_language(self, message: Optional[Message], default: str = 'en') -> str:
     if not message or not hasattr(message, 'from_user') or \
@@ -149,6 +151,8 @@ class CustomClient(Client):
   async def player_next(self, chat_id: int) -> None:
     _next: Optional[Tuple[int, str, str, str]] = client._ustorage.playlist_dequeue(chat_id)
     if not _next:
+      client._ustorage.clean_playlist(chat_id)
+
       try:
         await callapi.leave_call(chat_id)
       except (NoActiveGroupCall, NotInCallError):
@@ -272,17 +276,17 @@ client: CustomClient = CustomClient(
   api_hash=os.environ['TG_API_HASH'])
 
 
-@client.on_message(filters.command('start'))
+@client.on_message(filters.command('start') & filters.private)
 async def start(client, message) -> None:
-  pass
+  await message.reply(client.ui(message)['start'])
 
 
-@client.on_message(filters.command('help'))
+@client.on_message(filters.command('help') & filters.private)
 async def help(client, message) -> None:
-  pass
+  await message.reply(client.ui(message)['help'], disable_web_page_preview=True)
 
 
-@client.on_message(filters.command('play') & ~storage.ChatLocked & Whitelisted)
+@client.on_message(filters.command('play') & ~storage.ChatLocked & Whitelisted & filters.group)
 @storage.UseLock()
 async def play(client, message) -> None:
   if message.text.count(' ') == 0:
@@ -296,7 +300,7 @@ async def play(client, message) -> None:
   await client.player_play(message, ctx)
 
 
-@client.on_message(filters.command('pause') & ~storage.ChatLocked & Whitelisted)
+@client.on_message(filters.command('pause') & ~storage.ChatLocked & Whitelisted& filters.group)
 @storage.UseLock()
 async def pause(client, message) -> None:
   try:
@@ -308,7 +312,7 @@ async def pause(client, message) -> None:
     return
 
 
-@client.on_message(filters.command('resume') & ~storage.ChatLocked & Whitelisted)
+@client.on_message(filters.command('resume') & ~storage.ChatLocked & Whitelisted& filters.group)
 @storage.UseLock()
 async def resume(client, message) -> None:
   try:
@@ -320,7 +324,7 @@ async def resume(client, message) -> None:
     return
 
 
-@client.on_message(filters.command('next') & ~storage.ChatLocked & Whitelisted)
+@client.on_message(filters.command('next') & ~storage.ChatLocked & Whitelisted& filters.group)
 @storage.UseLock(NEXT_LOCK_LEVEL)
 async def cnext(client, message) -> None:
   try:
@@ -331,7 +335,7 @@ async def cnext(client, message) -> None:
     return
 
 
-@client.on_message(filters.command('volume') & ~storage.ChatLocked & Whitelisted)
+@client.on_message(filters.command('volume') & ~storage.ChatLocked & Whitelisted& filters.group)
 @storage.UseLock()
 async def volume(client, message) -> None:
   if message.text.count(' ') == 0:
@@ -350,7 +354,7 @@ async def volume(client, message) -> None:
     await client.send_status(message, client.ui(message)['not_in_voice'])
 
 
-@client.on_message(filters.command('stop') & ~storage.ChatLocked & Whitelisted)
+@client.on_message(filters.command('stop') & ~storage.ChatLocked & Whitelisted& filters.group)
 @storage.UseLock()
 async def stop(client, message) -> None:
   try:
@@ -361,13 +365,13 @@ async def stop(client, message) -> None:
   client._ustorage.clean_playlist(message.chat.id)
 
 
-@client.on_message(filters.command('status') & ~storage.ChatLocked & Whitelisted)
+@client.on_message(filters.command('status') & ~storage.ChatLocked & Whitelisted & filters.group)
 @storage.UseLock()
 async def status(client, message) -> None:
   await client.player_playing(message)
 
 
-@client.on_message(filters.command('playlist') & Whitelisted)
+@client.on_message(filters.command('playlist') & Whitelisted & filters.group)
 async def playlist(client, message) -> None:
   size: int = client._ustorage.playlist_size(message.chat.id)
   if size == 0:
