@@ -219,8 +219,12 @@ def UseLock(lock_level: int = 1) -> Callable:
 
       except Exception as e:
         # TODO: Capture error
-        print(traceback.format_exc())
-        print('Unhandled exception', e)
+        try:
+          await args[0].report_error(args[1], e, traceback.format_exc())
+
+        except:
+          print(traceback.format_exc())
+          print('Unhandled exception', e)
 
       if not is_locked:
         args[0]._ustorage.unlock_chat(ExtractChatID(args[1]))
