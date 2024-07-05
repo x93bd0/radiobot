@@ -149,8 +149,8 @@ class CustomClient(Client):
             break
 
         url = f'https://youtube.com/watch?v={watchv}'
+        info = ytdl.extract_info(url, download=False, process=False)
 
-      info = ytdl.extract_info(url, download=False, process=False)
       if info['extractor'] == 'youtube':
         author = (' & '.join(info['artists']) if 'artists' in info else info['uploader'])
         title = info['title']
@@ -329,6 +329,7 @@ client: CustomClient = CustomClient(
   api_id=int(os.environ['TG_API_ID']),
   api_hash=os.environ['TG_API_HASH'])
 
+# From https://stackoverflow.com/a/61033353
 youtube_regex = re.compile(r'(?:https?:\/\/)?(?:www\.)?youtu(?:\.be\/|be.com\/\S*(?:watch|embed)(?:(?:(?=\/[-a-zA-Z0-9_]{11,}(?!\S))\/)|(?:\S*v=|v\/)))([-a-zA-Z0-9_]{11,})')
 ytdl: YoutubeDL = YoutubeDL()
 
