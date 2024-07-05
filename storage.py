@@ -18,7 +18,9 @@ class TemporaryStorage:
     self._db.execute(
       'create table lock_data (chat_id integer primary key, time timestamp, lock_level integer)')
     self._db.execute(
-      'create table playlist (chat_id integer, song_url varchar, song_author varchar, song_name varchar, time timestamp)')
+      'create table playlist (' +
+        'chat_id integer, song_url varchar, song_author varchar,' +
+        'song_name varchar, song_length integer, time timestamp)')
     self._db.execute(
       'create table plsize (chat_id integer, size integer)')
 
@@ -64,12 +66,15 @@ class TemporaryStorage:
       'delete from lock_data where chat_id=?', (chat_id,))
 
 
-  def fetch_playlist(self, chat_id: int, limit: int = 10) -> List[Tuple[str, int, str, str]]:
+  def fetch_playlist(
+    self, chat_id: int, limit: int = 10
+  ) -> List[Tuple[str, int, str, str, int]]:
     cursor: sqlite3.Cursor = self._db.cursor()
     cursor.execute(
-      'select song_url, time, song_author, song_name from playlist where chat_id = ? limit ?',
+      'select song_url, time, song_author, song_name, song_length ' +
+      'from playlist where chat_id = ? limit ?',
       (chat_id, limit))
-    ret: Optional[List[Tuple[str, int, str, str]]] = cursor.fetchall()
+    ret: Optional[List[Tuple[str, int, str, str, int]]] = cursor.fetchall()
     if not ret:
       return []
     return ret
@@ -92,7 +97,8 @@ class TemporaryStorage:
 
   def playlist_enqueue(
     self, chat_id: int, url: str,
-    author: str = '', name: str = ''
+    author: str = '', name: str = '',
+    length: int = 0
   ) -> int:
     plsize: int = self.playlist_size(chat_id)
     if plsize == 0:
@@ -105,34 +111,38 @@ class TemporaryStorage:
         'update plsize set size = ? where chat_id = ?',
         (plsize + 1, chat_id))
 
-    # TODO: implement playlist author & name
     self._db.execute(
-      'insert into playlist values (?, ?, ?, ?, ?)',
-      (chat_id, url, author, name, time.time()))
+      'insert into playlist values (?, ?, ?, ?, ?, ?)',
+      (chat_id, url, author, name, length, time.time()))
     return plsize
 
   def playlist_actual(
     self, chat_id: int
-  ) -> Optional[Tuple[int, str, str, str]]:
+  ) -> Optional[Tuple[int, str, str, str, int]]:
     cursor: sqlite3.Cursor = self._db.cursor()
     cursor.execute(
-      'select song_url, time, song_author, song_name from playlist where chat_id = ? limit 1', (chat_id,))
+      'select song_url, time, song_author, song_name, song_length ' +
+      'from playlist where chat_id = ? limit 1', (chat_id,))
+
     ret: Optional[Tuple[str, int, str, str]] = cursor.fetchone()
     if not ret:
       return None
+
     return (
       self.playlist_size(chat_id) - self.playlist_dsize(chat_id),
-      ret[0], ret[2], ret[3]
+      ret[0], ret[2], ret[3], ret[4]
     )
 
   def playlist_dequeue(
     self, chat_id: int
-  ) -> Optional[Tuple[int, str, str, str]]:
+  ) -> Optional[Tuple[int, str, str, str, int]]:
     cursor: sqlite3.Cursor = self._db.cursor()
     cursor.execute(
-      'select song_url, time, song_author, song_name from playlist where chat_id = ? limit 2', (chat_id,))
-    bef: Optional[Tuple[str, int, str, str]] = cursor.fetchone()
-    ret: Optional[Tuple[str, int, str, str]] = cursor.fetchone()
+      'select song_url, time, song_author, song_name, song_length ' +
+      'from playlist where chat_id = ? limit 2', (chat_id,))
+
+    bef: Optional[Tuple[str, int, str, str, int]] = cursor.fetchone()
+    ret: Optional[Tuple[str, int, str, str, int]] = cursor.fetchone()
 
     if not bef or not ret:
       self._db.execute(
@@ -145,7 +155,7 @@ class TemporaryStorage:
 
     return (
       self.playlist_size(chat_id) - self.playlist_dsize(chat_id),
-      ret[0], ret[2], ret[3]
+      ret[0], ret[2], ret[3], ret[4]
     )
 
   def clean_playlist(self, chat_id: int) -> None:
@@ -200,6 +210,23 @@ def ChatLockedBetween(left: int, right: int) -> Callable:
   return filters.create(_ChatLockedBetween, left=left, right=right)
 
 
+def NoLock(method: Callable) -> Callable:
+  async def new_method(*args, **kwargs) -> Any:
+    try:
+      await method(*args, **kwargs)
+
+    except Exception as e:
+      try:
+        await args[0].report_error(
+          args[1], e, traceback.format_exc(),
+          method.__name__)
+
+      except:
+        print(traceback.format_exc())
+        print('Unhandled exception', e)
+  new_method.__name__ = '_ptctd_' + method.__name__
+  return new_method
+
 def UseLock(lock_level: int = 1) -> Callable:
   def decorator(method: Callable) -> Callable:
     async def new_method(*args, **kwargs) -> Any:
@@ -218,9 +245,10 @@ def UseLock(lock_level: int = 1) -> Callable:
         await method(*args, **kwargs)
 
       except Exception as e:
-        # TODO: Capture error
         try:
-          await args[0].report_error(args[1], e, traceback.format_exc())
+          await args[0].report_error(
+            args[1], e, traceback.format_exc(),
+            method.__name__)
 
         except:
           print(traceback.format_exc())

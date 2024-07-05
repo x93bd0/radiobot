@@ -15,15 +15,18 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 
 from typing import Self, Dict, Any, Callable, Union, Optional, Tuple
 from pytgcalls.types import MediaStream, AudioQuality, Update
+from pyrogram.types import ChatInviteLink, Message, Audio
 from pytgcalls import PyTgCalls, filters as pfilters
-from pyrogram.types import ChatInviteLink, Message
 from pyrogram import Client, filters, idle, enums
+from mimetypes import guess_extension
 from validators import url as vurl
 from ntgcalls import FFmpegError
 from yt_dlp import YoutubeDL
 import traceback
 import asyncio
 import storage
+import math
+import uuid
 import json
 import os
 import re
@@ -33,23 +36,27 @@ if 'DEBUG' in os.environ:
   tracemalloc.start()
 
 
+# WARNING: RADIOBOT DOES NOT PROVIDE A METHOD
+#           FOR DELETING MEDIA FILES DOWNLOADED FROM TELEGRAM!
+# TODO: Include a trash manager
+
 # TODO: Better language managment
-# TODO: Implement ignore(n) command
 # TODO: Implement playlist limit
 # TODO: Implement permissions
 # TODO: Implement group language
-# TODO: Implement playing from telegram audios
-# TODO: Add song_time to playlist storage
-# TODO: fix /playlist: extra newline
+# TODO: Complete spanish i18n
+# TODO: Implement playing from telegram audios (50% done)
 
+
+YOUTUBE_SNAME_PARSING: bool = True
 
 NEXT_LOCK_LEVEL:       int = 2
 NEXT_RETRY_COUNT:      int = 15
 NEXT_SLEEP:          float = 0.5
 MSGID_THREESHOLD:      int = 3
 ERROR_LOGGING_ID:      int = 1211166567
+TELEGRAM_MEDIA_SIZE:   int = 50*1024*1024
 CHAT_INVITE_LINK_NAME: str = 'RadioBot User'
-
 
 class CustomClient(Client):
   def __init__(self, *args, **kwargs) -> Self:
@@ -94,7 +101,10 @@ class CustomClient(Client):
         return True
     return False
 
-  async def player_play(self, chat_id: Union[Message, int], url: str) -> None:
+  async def player_play(
+    self, chat_id: Union[Message, int],
+    url: str, ctx: Optional[Dict[str, Any]] = None
+  ) -> None:
     message: Optional[Message]
     cid: int
 
@@ -135,8 +145,10 @@ class CustomClient(Client):
 
     author: str
     title: str
+    length: int
+    refurl: str
 
-    if youtube_regex.match(url):
+    if isinstance(url, str) and youtube_regex.match(url):
       info = ytdl.extract_info(url, download=False, process=False)
       if info['extractor'] != 'youtube':
         url = info['webpage_url']
@@ -154,6 +166,21 @@ class CustomClient(Client):
       if info['extractor'] == 'youtube':
         author = (' & '.join(info['artists']) if 'artists' in info else info['uploader'])
         title = info['title']
+        length = info['duration']
+
+        if YOUTUBE_SNAME_PARSING:
+          if title.lower().startswith(author.lower()):
+            if ' - ' in title:
+              sp = title.split(' - ', 1)
+              author = sp[0]
+              title = sp[1]
+        refurl = info['webpage_url']
+
+    elif ctx:
+      author = ctx.get('author', None)
+      title = ctx.get('title', None)
+      length = ctx.get('duration', None)
+      refurl = ctx.get('refurl', url)
 
     try:
       await callapi.play(cid, MediaStream(
@@ -171,8 +198,39 @@ class CustomClient(Client):
       await info.edit_text("ERROR")
       return
 
-    self._ustorage.playlist_enqueue(cid, url, author=author, name=title)
+    self._ustorage.playlist_enqueue(
+      cid, refurl or url, author=author,
+      name=title, length=length)
     await self.player_playing(message)
+
+  async def _progress(self, part: int, total: int):
+    print(part, total)
+
+  async def player_from_telegram(self, message: Message, audio: Audio) -> None:
+    if audio.file_size > TELEGRAM_MEDIA_SIZE:
+      # TODO: better errors
+      return
+
+    # TODO: catch error
+    url: str = await self.download_media(
+      audio.file_id,
+      f'/tmp/{audio.file_id}{guess_extension(audio.mime_type)}',
+      progress=self._progress, in_memory=False, block=True)
+
+    pid: int = message.chat.id
+    if pid < 0:
+      pid = norm_cid(-message.chat.id)
+
+    mid = message.id
+    if hasattr(message, 'reply_to_message') and hasattr(message.reply_to_message, 'audio'):
+      mid = message.reply_to_message.id
+
+    await self.player_play(message, url, {
+      'author': audio.performer if hasattr(audio, 'performer') else None,
+      'title': audio.title if hasattr(audio, 'title') else None,
+      'duration': audio.duration if hasattr(audio, 'duration') else None,
+      'refurl': f'https://t.me/c/{pid}/{mid}'
+    })
 
   # TODO: Support message input
   async def player_next(self, chat_id: int) -> None:
@@ -201,13 +259,13 @@ class CustomClient(Client):
       client._ustorage.clean_playlist(chat_id)
 
   async def player_stop(self, chat_id: int) -> None:
-    await userbot.leave_call(chat_id)
+    await callapi.leave_call(chat_id)
 
   async def player_resume(self, chat_id: int) -> None:
-    await userbot.resume_stream(chat_id)
+    await callapi.resume_stream(chat_id)
 
   async def player_pause(self, chat_id: int) -> None:
-    await userbot.pause_stream(chat_id)
+    await callapi.pause_stream(chat_id)
 
   async def player_playing(
     self, message: Union[Message, int],
@@ -235,7 +293,7 @@ class CustomClient(Client):
     song: str
     if data[2] != '' or data[3] != '':
       song = strings['songfmt_wauthor'].format(
-        data[0], data[1],
+        data[0], '' if not vurl(data[1]) else data[1],
         data[2] or strings['no_author'],
         data[3] or strings['no_title'])
 
@@ -243,8 +301,12 @@ class CustomClient(Client):
       song = strings['songfmt_nauthor'].format(
         data[0], data[1])
 
+    duration: str = '?'
+    if data[4]:
+      duration = client.to_strtime(data[4])
+
     await client.send_status(message, strings['playing'].format(
-      song, client.to_strtime(elapsed)), title=strings['ptitle'])
+      song, client.to_strtime(elapsed), duration), title=strings['ptitle'])
 
   async def send_status(self, message: Union[Message, int], *args, **kwargs) -> Message:
     chat_id: int
@@ -254,6 +316,7 @@ class CustomClient(Client):
     if 'title' in kwargs:
       title = kwargs['title']
       del kwargs['title']
+
     else:
       title = self.ui(message)['deftitle']
 
@@ -285,7 +348,8 @@ class CustomClient(Client):
 
   async def report_error(
     self, ctx: Union[Message, str],
-    exc: Exception, formatexc: str
+    exc: Exception, formatexc: str,
+    method_name: str = ''
   ) -> None:
     if isinstance(ctx, Message):
       message: Message = ctx
@@ -307,7 +371,7 @@ class CustomClient(Client):
 
     await self.send_message(chat_id=ERROR_LOGGING_ID,
       text=self.ui(None)['rerror'].format(
-        ctx, type(exc).__name__, str(exc), formatexc))
+        method_name, ctx, type(exc).__name__, str(exc), formatexc))
 
 
 
@@ -332,6 +396,7 @@ client: CustomClient = CustomClient(
 # From https://stackoverflow.com/a/61033353
 youtube_regex = re.compile(r'(?:https?:\/\/)?(?:www\.)?youtu(?:\.be\/|be.com\/\S*(?:watch|embed)(?:(?:(?=\/[-a-zA-Z0-9_]{11,}(?!\S))\/)|(?:\S*v=|v\/)))([-a-zA-Z0-9_]{11,})')
 ytdl: YoutubeDL = YoutubeDL()
+norm_cid: Callable = lambda n: n % 10**int(max(math.log10(n) - 2, 1))
 
 
 @client.on_message(filters.command('start') & filters.private)
@@ -344,9 +409,17 @@ async def help(client, message) -> None:
   await message.reply(client.ui(message)['help'], disable_web_page_preview=True)
 
 
-@client.on_message(filters.command('play') & ~storage.ChatLocked & Whitelisted)
+@client.on_message(filters.command('play') & ~storage.ChatLocked & Whitelisted & filters.group)
 @storage.UseLock()
 async def play(client, message) -> None:
+  top = message
+  if hasattr(message, 'reply_to_message'):
+    top = message.reply_to_message
+
+  if hasattr(top, 'audio'):
+    await client.player_from_telegram(message, top.audio)
+    return
+
   if message.text.count(' ') == 0:
     await client.send_status(message, client.ui(message)['no_payload_play'])
     return
@@ -370,7 +443,7 @@ async def pause(client, message) -> None:
     return
 
 
-@client.on_message(filters.command('resume') & ~storage.ChatLocked & Whitelisted& filters.group)
+@client.on_message(filters.command('resume') & ~storage.ChatLocked & Whitelisted & filters.group)
 @storage.UseLock()
 async def resume(client, message) -> None:
   try:
@@ -382,7 +455,7 @@ async def resume(client, message) -> None:
     return
 
 
-@client.on_message(filters.command('next') & ~storage.ChatLocked & Whitelisted& filters.group)
+@client.on_message(filters.command('next') & ~storage.ChatLocked & Whitelisted & filters.group)
 @storage.UseLock(NEXT_LOCK_LEVEL)
 async def cnext(client, message) -> None:
   try:
@@ -412,7 +485,7 @@ async def volume(client, message) -> None:
     await client.send_status(message, client.ui(message)['not_in_voice'])
 
 
-@client.on_message(filters.command('stop') & ~storage.ChatLocked & Whitelisted& filters.group)
+@client.on_message(filters.command('stop') & ~storage.ChatLocked & Whitelisted & filters.group)
 @storage.UseLock()
 async def stop(client, message) -> None:
   try:
@@ -430,6 +503,7 @@ async def status(client, message) -> None:
 
 
 @client.on_message(filters.command('playlist') & Whitelisted & filters.group)
+@storage.NoLock
 async def playlist(client, message) -> None:
   size: int = client._ustorage.playlist_size(message.chat.id)
   if size == 0:
@@ -455,10 +529,11 @@ async def playlist(client, message) -> None:
         size - pidx + i, song[0]) + '\n'
     i += 1
 
-  await message.reply(strings['fmt'].format(strings['pltitle'], o_songs))
+  await message.reply(strings['fmt'].format(strings['pltitle'], o_songs.strip()))
 
 
 @callapi.on_update(pfilters.stream_end)
+@storage.NoLock
 async def next_callback(
   _: PyTgCalls, update: Update, locked: bool = False
 ) -> None:

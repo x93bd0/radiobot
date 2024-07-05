@@ -42,7 +42,7 @@
     "fmt": "╔ 🎧 {}\n{}\n╚ 🔗 [Bot Channel](https://t.me/x93dev)",
 
     "ptitle": "Currently playing",
-    "playing": "{}\n╠ ⏳ Time elapsed: {}",
+    "playing": "{}\n╠ ⏳ Time elapsed: {} / {}",
     "stopped": "╠ Player left voice chat",
     "resumed": "╠ Stream resumed",
     "enqueued": "╠ ⏳ Audio enqueued\n╠  #️⃣ Position #{}\n╠  🔗 [Audio]({})",
@@ -69,11 +69,13 @@
     "songfmt_wauthor": "╠ 🎼 #{0} [“{3}” by “{2}”]({1})",
     "songfmt_nauthor": "╠ 🎼 #{0} [“Audio”]({1})",
     "pltitle": "Current playlist",
+    "no_author": "Unknown author",
+    "no_title": "Unknown track",
 
     "start": "» Welcome to RadioBot «\nThis bot was made for streaming music/audio in **Telegram Voice Chats**. It's functionality is easy to understand, being explained in the `/help` command.\n\n» I hope you enjoy my bot, right now, it's a small personal project. I'm not actively developing it, but I'm trying to. You can follow my progress on it in the following [github repository](https://github.com/x93bd0/radiobot), or in [my personal channel](http://t.me/x93dev).\n\n✨ Thank you for using me! ✨",
     "help": "» Command List «\n» **Start the bot:** /start\n»» Sends a welcome message\n\n» **Retrieve help message:** /help\n»» Sends this message\n\n» **Play something:** /play\n»» Plays whatever you put as an argument (right now, it supports direct links and YouTube links)\n»» __Example:__ `/play https://www.youtube.com/watch?v=DV7J9kwAtOQ`\n\n» **Play next in queue:** /next\n»» Skips the song that's currently being played, and plays the next one\n\n» **Pause the transmission**: /pause\n»» Pauses whatever is being played\n\n» **Resume the transmission:** /resume\n»» Resumes a previously paused transmission\n\n» **Stop the transmission:** /stop\n»» Stops the current session and deletes the playlist\n\n» **Change the transmission volume:** /volume\n»» Changes the transmission volume to the one you pass as an argument\n»» __This command is known for not working correctly, use it at your own risk__\n\n» **Transmission status:** /status\n»» Updates the current playing status message\n\n» **Upcoming songs:** /playlist\n»» Sends a list of upcoming songs in the queue, including the one that's being played",
 
-    "rerror": "<u>» Catched Exception! «</u>\n» Context:\n```python\n{}```\n\n» **[{}]** __{}__\n```python\n{}```",
+    "rerror": "<u>» Catched Exception! «</u>\n» Context: `{}`\n```python\n{}```\n\n» **[{}]** __{}__\n```python\n{}```",
     "remsg": "Message (id:{})\n\tDate {}\n\tUser <{}> (id:{}, @{})\n\t\tLanguage {}\n\tChat <{}> (id:{}, @{})\n\t\tPermissions\n\t\t\t{}\n\tText: \"{}\""
   }
 }
