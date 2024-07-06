@@ -198,11 +198,11 @@ def ExtractChatID(query: Any):
 
 @filters.create
 async def ChatLocked(_, client: Client, query: Any):
-  return client._ustorage.is_locked(client.ExtractChatID(query))
+  return client.ustorage.is_locked(client.ExtractChatID(query))
 
 
 async def _ChatLockedBetween(flt: Any, client: Client, query: Any) -> bool:
-  level: int = client._ustorage.get_lock_level(client.ExtractChatID(query))
+  level: int = client.ustorage.get_lock_level(client.ExtractChatID(query))
   return flt.left <= level and level <= flt.right
 
 
@@ -236,9 +236,9 @@ def UseLock(lock_level: int = 1) -> Callable:
 
       chat_id: int = args[0].ExtractChatID(args[1])
       if not is_locked:
-        _id: int = args[0]._ustorage.lock_chat(chat_id, lock_level)
+        _id: int = args[0].ustorage.lock_chat(chat_id, lock_level)
         await asyncio.sleep(0.1)
-        if _id != args[0]._ustorage.get_lock_time(chat_id):
+        if _id != args[0].ustorage.get_lock_time(chat_id):
           return  # Another method is running
 
       try:
@@ -262,7 +262,7 @@ def UseLock(lock_level: int = 1) -> Callable:
           print('Unhandled exception', e)
 
       if not is_locked:
-        args[0]._ustorage.unlock_chat(ExtractChatID(args[1]))
+        args[0].ustorage.unlock_chat(ExtractChatID(args[1]))
     new_method.__name__ = '_locked_' + method.__name__
     return new_method
   return decorator

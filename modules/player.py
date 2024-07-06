@@ -29,6 +29,8 @@ import re
 
 
 # TODO: Better formatting (avoid >80 chars)
+# TODO: Refactor module accordingly
+
 # From https://stackoverflow.com/a/61033353
 youtube_regex = re.compile(
   r'(?:https?:\/\/)?(?:www\.)?youtu(?:\.be\/|be.com\/\S*(?:watch|embed)(?:(?:(?=\/[-a-zA-Z0-9_]{11,}(?!\S))\/)|(?:\S*v=|v\/)))([-a-zA-Z0-9_]{11,})')
@@ -67,7 +69,10 @@ class Player:
         info = ytdl.extract_info(url, download=False, process=False)
 
       if info['extractor'] == 'youtube':
-        author = (' & '.join(info['artists']) if 'artists' in info else info['uploader'])
+        author = info['uploader']
+        if 'artists' in info:
+          author = ' & '.join(info['artists'])
+
         title = info['title']
         length = info['duration']
 
@@ -77,6 +82,7 @@ class Player:
               sp = title.split(' - ', 1)
               author = sp[0]
               title = sp[1]
+
         refurl = info['webpage_url']
 
     elif ctx:
@@ -103,7 +109,8 @@ class Player:
       return
 
     info: Message = \
-      await self.bot.send_status(message, self.bot.ui(message or cid)['joining_voice'])
+      await self.bot.send_status(
+        message, self.bot.ui(message or cid)['joining_voice'])
 
     try:
       await self.ubot.get_chat(cid)
@@ -285,7 +292,8 @@ class Player:
       pid = norm_cid(-message.chat.id)
 
     mid = message.id
-    if hasattr(message, 'reply_to_message') and hasattr(message.reply_to_message, 'audio'):
+    if hasattr(message, 'reply_to_message') and \
+        hasattr(message.reply_to_message, 'audio'):
       mid = message.reply_to_message.id
 
     await self.play(message, url, {

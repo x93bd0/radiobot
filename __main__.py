@@ -14,6 +14,8 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 )
 
 from modules.player import Player
+from modules.baseui import Module as BaseUI
+from modules.groupui import Module as GroupUI
 
 from typing import Self, Dict, Any, Callable, Union, Optional, Tuple
 from pytgcalls.types import MediaStream, AudioQuality, Update
@@ -79,15 +81,12 @@ if os.path.isfile('config.json'):
 # TODO: Implement playlist limit
 # TODO: Implement permissions
 # TODO: Implement group language
-# TODO: Implement playing from telegram audios (50% done)
-
+# TODO: Further refactorization
 
 class CustomClient(Client):
   def __init__(self, config: Dict[str, Any], *args, **kwargs) -> Self:
     Client.__init__(self, *args, **kwargs)
-    # TODO: Transition from _ustorage to ustorage
-    self._ustorage = storage.TemporaryStorage()
-    self.ustorage = self._ustorage
+    self.ustorage = storage.TemporaryStorage()
     self.ExtractChatID = storage.ExtractChatID
     self.config = config
 
@@ -157,13 +156,13 @@ class CustomClient(Client):
     if message:
       _id = message.id
 
-    last: int = self._ustorage.get_last_statusmsg(chat_id)
+    last: int = self.ustorage.get_last_statusmsg(chat_id)
     if last == -1 or (_id != -1 and (_id - last) > self.config['msgid_threeshold']):
       if last != -1:
         await self.delete_messages(chat_id, last)
 
       newmsg: Message = await self.send_message(chat_id, *args, **kwargs)
-      self._ustorage.set_last_statusmsg(chat_id, newmsg.id)
+      self.ustorage.set_last_statusmsg(chat_id, newmsg.id)
       return newmsg
 
     try:
@@ -224,139 +223,10 @@ client: CustomClient = CustomClient(
 
 callapi: CustomAPI = CustomAPI(client, userbot)
 client.player = Player(client, userbot, callapi)
+client.st = storage
 
-
-@client.on_message(filters.command('start') & filters.private)
-async def start(client, message) -> None:
-  await message.reply(client.ui(message)['start'])
-
-
-@client.on_message(filters.command('help') & filters.private)
-async def help(client, message) -> None:
-  await message.reply(client.ui(message)['help'], disable_web_page_preview=True)
-
-
-@client.on_message(filters.command('play') & ~storage.ChatLocked & Whitelisted & filters.group)
-@storage.UseLock()
-async def play(client, message) -> None:
-  top = message
-  if hasattr(message, 'reply_to_message'):
-    top = message.reply_to_message
-
-  if hasattr(top, 'audio'):
-    await client.player.from_telegram(message, top.audio)
-    return
-
-  if message.text.count(' ') == 0:
-    await client.send_status(message, client.ui(message)['no_payload_play'])
-    return
-
-  ctx: str = message.text.split(' ', 1)[1]
-  if not vurl(ctx):
-    await client.send_status(message, client.ui(message)['invalid_url'])
-    return
-  await client.player.play(message, ctx)
-
-
-@client.on_message(filters.command('pause') & ~storage.ChatLocked & Whitelisted& filters.group)
-@storage.UseLock()
-async def pause(client, message) -> None:
-  try:
-    await client.player.pause(message.chat.id)
-    await client.send_status(message, client.ui(message)['paused'])
-
-  except NotInCallError:
-    await client.send_status(message, client.ui(message)['not_in_voice'])
-    return
-
-
-@client.on_message(filters.command('resume') & ~storage.ChatLocked & Whitelisted & filters.group)
-@storage.UseLock()
-async def resume(client, message) -> None:
-  try:
-    await client.player.resume(message.chat.id)
-    await client.send_status(message, client.ui(message)['resumed'])
-
-  except NotInCallError:
-    await client.send_status(message, client.ui(message)['not_in_voice'])
-    return
-
-
-@client.on_message(filters.command('next') & ~storage.ChatLocked & Whitelisted & filters.group)
-@storage.UseLock(config['next_lock_level'])
-async def cnext(client, message) -> None:
-  try:
-    await client.player.next(message.chat.id)
-
-  except NotInCallError:
-    await client.send_status(message, client.ui(message)['not_in_voice'])
-    return
-
-
-@client.on_message(filters.command('volume') & ~storage.ChatLocked & Whitelisted& filters.group)
-@storage.UseLock()
-async def volume(client, message) -> None:
-  if message.text.count(' ') == 0:
-    await client.send_status(message, client.ui(message)['volume_valueerror'])
-    return
-
-  ctx: str = message.text.split(' ', 1)[1]
-  try:
-    await callapi.change_volume_call(message.chat.id, int(ctx))
-    await client.send_status(message, client.ui(message)['volume_set_to'].format(int(ctx)))
-
-  except ValueError:
-    await client.send_status(message, client.ui(message)['volume_valueerror'])
-
-  except (NotInCallError, NoActiveGroupCall, AttributeError):
-    await client.send_status(message, client.ui(message)['not_in_voice'])
-
-
-@client.on_message(filters.command('stop') & ~storage.ChatLocked & Whitelisted & filters.group)
-@storage.UseLock()
-async def stop(client, message) -> None:
-  try:
-    await client.player.stop(message.chat.id)
-    await client.send_status(message, client.ui(message)['stopped'])
-  except (NoActiveGroupCall, NotInCallError):
-    await message.reply(client.ui(message)['not_in_voice'])
-  client._ustorage.clean_playlist(message.chat.id)
-
-
-@client.on_message(filters.command('status') & ~storage.ChatLocked & Whitelisted & filters.group)
-@storage.UseLock()
-async def status(client, message) -> None:
-  await client.player.send_playing(message)
-
-
-@client.on_message(filters.command('playlist') & Whitelisted & filters.group)
-@storage.NoLock
-async def playlist(client, message) -> None:
-  size: int = client._ustorage.playlist_size(message.chat.id)
-  if size == 0:
-    await client.send_status(message, client.ui(message)['not_in_voice'])
-    return
-
-  pidx: int = client._ustorage.playlist_dsize(message.chat.id)
-  songs: List[str, int, str, str] = \
-    client._ustorage.fetch_playlist(message.chat.id, 10)
-  strings: Dict[str, str] = client.ui(message)
-
-  o_songs: str = ""
-  i: int = 0
-  for song in songs:
-    if song[2] != '' or song[3] != '':
-      o_songs += strings['songfmt_wauthor'].format(
-        size - pidx + i, song[0],
-        song[2] or strings['no_author'],
-        song[3] or strings['no_title']) + '\n'
-
-    else:
-      o_songs += strings['songfmt_nauthor'].format(
-        size - pidx + i, song[0]) + '\n'
-    i += 1
-
-  await message.reply(strings['fmt'].format(strings['pltitle'], o_songs.strip()))
+BaseUI(client).install()
+GroupUI(client).install()
 
 
 @callapi.on_update(pfilters.stream_end)
@@ -368,28 +238,28 @@ async def next_callback(
   i: int = 0
 
   if not locked:
-    lock_level: int = client._ustorage.get_lock_level(chat_id)
+    lock_level: int = client.ustorage.get_lock_level(chat_id)
     while lock_level > 0 and i <= config['next_retry_count']:
       if lock_level == config['next_lock_level']:
         return
 
       await asyncio.sleep(config['next_sleep'])
-      lock_level = client._ustorage.get_lock_level(chat_id)
+      lock_level = client.ustorage.get_lock_level(chat_id)
       i += 1
 
     if i - 1 == config['next_retry_count']:
       return
 
-    _id: int = client._ustorage.lock_chat(chat_id)
+    _id: int = client.ustorage.lock_chat(chat_id)
     await asyncio.sleep(0.1)
-    if _id != client._ustorage.get_lock_time(chat_id):
+    if _id != client.ustorage.get_lock_time(chat_id):
       await asyncio.sleep(1)
       next_callback(_, update)
       return  # Another method is running
 
   await client.player.next(chat_id)
   if not locked:
-    client._ustorage.unlock_chat(chat_id)
+    client.ustorage.unlock_chat(chat_id)
 
 
 client.start()
