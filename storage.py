@@ -245,10 +245,17 @@ def UseLock(lock_level: int = 1) -> Callable:
         await method(*args, **kwargs)
 
       except Exception as e:
+        exc: str = traceback.format_exc()
         try:
-          await args[0].report_error(
-            args[1], e, traceback.format_exc(),
-            method.__name__)
+          if not isinstance(args[0], Client):
+            await args[0].nbot.report_error(
+              args[1], e, exc,
+              method.__name__)
+
+          else:
+            await args[0].report_error(
+              args[1], e, exc,
+              method.__name__)
 
         except:
           print(traceback.format_exc())

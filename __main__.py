@@ -79,7 +79,6 @@ if os.path.isfile('config.json'):
 # TODO: Implement playlist limit
 # TODO: Implement permissions
 # TODO: Implement group language
-# TODO: Complete spanish i18n
 # TODO: Implement playing from telegram audios (50% done)
 
 
@@ -110,11 +109,13 @@ class CustomClient(Client):
     return lc
 
   def to_strtime(self, time: int) -> str:
-    # TODO: Test
-    if time > 59 * 60 + 60:
-      return '{:0>2}:{:0>2}:{:0>2}'.format(
-        int(time / 3600), int((time % 3600) / 60), int((time % 3600) % 60))
-    return '{:0>2}:{:0>2}'.format(int(time / 60), int(time % 60))
+    if time > 60 * 60:
+      hour: int = int(time / 3600)
+      time -= hour * 3600
+      minutes: int = time / 60
+      time -= minutes * 60
+      return '{:0>2}:{:0>2}:{:0>2}'.format(hour, minutes, time)
+    return '{:0>2}:{:0>2}'.format(int(time / 60), time % 60)
 
   def parse_message_cid(self, message: Union[Message, int]) -> Tuple[Optional[Message], int]:
     if isinstance(message, int):
@@ -132,35 +133,6 @@ class CustomClient(Client):
       if hasattr(admin, 'user') and admin.user.id == user_id:
         return True
     return False
-
-  async def _progress(self, part: int, total: int):
-    print(part, total)
-
-  async def player_from_telegram(self, message: Message, audio: Audio) -> None:
-    if audio.file_size > self.config['telegram_media_size']:
-      # TODO: better errors
-      return
-
-    # TODO: catch error
-    url: str = await self.download_media(
-      audio.file_id,
-      f'/tmp/{audio.file_unique_id}{guess_extension(audio.mime_type)}',
-      progress=self._progress, in_memory=False, block=True)
-
-    pid: int = message.chat.id
-    if pid < 0:
-      pid = norm_cid(-message.chat.id)
-
-    mid = message.id
-    if hasattr(message, 'reply_to_message') and hasattr(message.reply_to_message, 'audio'):
-      mid = message.reply_to_message.id
-
-    await self.player.play(message, url, {
-      'author': audio.performer if hasattr(audio, 'performer') else None,
-      'title': audio.title if hasattr(audio, 'title') else None,
-      'duration': audio.duration if hasattr(audio, 'duration') else None,
-      'refurl': f'https://t.me/c/{pid}/{mid}'
-    })
 
   async def send_status(self, message: Union[Message, int], *args, **kwargs) -> Message:
     chat_id: int
@@ -228,19 +200,21 @@ class CustomClient(Client):
         method_name, ctx, type(exc).__name__, str(exc), formatexc))
 
 
+class CustomAPI(PyTgCalls):
+  def __init__(self, nbot: CustomClient, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+    self.nbot: CustomClient = nbot
+
 
 @filters.create
 async def Whitelisted(_, client: CustomClient, message: Message) -> bool:
   return await client.whitelisted(message.chat.id, message.from_user.id)
 
 
-
-
 userbot: Client = Client(
   name=os.environ['CLIENT_NAME'] + '_userbot',
   api_id=int(os.environ['TG_API_ID']),
   api_hash=os.environ['TG_API_HASH'])
-callapi: PyTgCalls = PyTgCalls(userbot)
 
 client: CustomClient = CustomClient(
   config=config,
@@ -248,11 +222,8 @@ client: CustomClient = CustomClient(
   api_id=int(os.environ['TG_API_ID']),
   api_hash=os.environ['TG_API_HASH'])
 
+callapi: CustomAPI = CustomAPI(client, userbot)
 client.player = Player(client, userbot, callapi)
-
-# Deletes the first 3 digits of a number by calculating
-#  number % 10^max(number of digits - 3, 1)
-norm_cid: Callable = lambda n: n % 10**int(max(math.log10(n) - 2, 1))
 
 
 @client.on_message(filters.command('start') & filters.private)
@@ -273,7 +244,7 @@ async def play(client, message) -> None:
     top = message.reply_to_message
 
   if hasattr(top, 'audio'):
-    await client.player_from_telegram(message, top.audio)
+    await client.player.from_telegram(message, top.audio)
     return
 
   if message.text.count(' ') == 0:
@@ -406,7 +377,7 @@ async def next_callback(
       lock_level = client._ustorage.get_lock_level(chat_id)
       i += 1
 
-    if i - 1 == NEXT_RETRY_COUNT:
+    if i - 1 == config['next_retry_count']:
       return
 
     _id: int = client._ustorage.lock_chat(chat_id)

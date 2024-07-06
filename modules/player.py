@@ -14,15 +14,17 @@ from pyrogram.errors.exceptions.bad_request_400 import (
   MessageNotModified
 )
 
+from typing import Dict, Any, List, Optional, Union, Tuple, Callable
 from pytgcalls.types import MediaStream, AudioQuality, Update
-from typing import Dict, Any, List, Optional, Union, Tuple
+from pyrogram.types import Message, Audio
+from mimetypes import guess_extension
 from validators import url as vurl
-from pyrogram.types import Message
 from ntgcalls import FFmpegError
 from pytgcalls import PyTgCalls
 from pyrogram import Client
 from yt_dlp import YoutubeDL
 import traceback
+import math
 import re
 
 
@@ -31,6 +33,10 @@ import re
 youtube_regex = re.compile(
   r'(?:https?:\/\/)?(?:www\.)?youtu(?:\.be\/|be.com\/\S*(?:watch|embed)(?:(?:(?=\/[-a-zA-Z0-9_]{11,}(?!\S))\/)|(?:\S*v=|v\/)))([-a-zA-Z0-9_]{11,})')
 ytdl: YoutubeDL = YoutubeDL()
+
+# Deletes the first 3 digits of a number by calculating
+#  number % 10^max(number of digits - 3, 1)
+norm_cid: Callable = lambda n: n % 10**int(max(math.log10(n) - 2, 1))
 
 
 class Player:
@@ -140,7 +146,6 @@ class Player:
       NoAudioSourceFound, YtDlpError, FFmpegError,
       FileNotFoundError, AttributeError
     ) as e:
-      # TODO: Better error (include message as context)
       await self.bot.report_error(
         message, e, traceback.format_exc(), 'player_play[play]')
       await info.edit_text("ERROR")
@@ -234,3 +239,58 @@ class Player:
 
     await self.bot.send_status(message, strings['playing'].format(
       song, self.bot.to_strtime(elapsed), duration), title=strings['ptitle'])
+
+  # Extras
+  async def _progress(
+    self, part: int, total: int, rtotal: int,
+    status: Dict[int, int], message: Message
+  ) -> None:
+    k = status.get(0, 0)
+    if k == 0 or (part / rtotal) - (k / rtotal) > (
+        0.25 if rtotal < 100*1024**2 else 0.10):
+
+      await self.bot.send_status(message,
+        self.bot.ui(message)['downloading'].format(
+        round(part / rtotal * 100, 2), round(part / 1024 ** 2, 2),
+        round(rtotal / 1024 ** 2, 2)))
+
+      status[0] = part
+
+  async def from_telegram(self, message: Message, audio: Audio) -> None:
+    if audio.file_size > self.bot.config['telegram_media_size']:
+      await self.bot.send_status(
+        message, self.bot.ui(message)['max_fsize_exc'].format(
+          round(self.bot.config['telegram_media_size'] / 1024 / 1024, 2)))
+      return
+
+    try:
+      status = {}
+      url: str = await self.bot.download_media(
+        audio.file_id,
+        f'/tmp/{audio.file_unique_id}{guess_extension(audio.mime_type)}',
+        progress=self._progress, in_memory=False, block=True,
+        progress_args=(audio.file_size, status, message))
+
+    except Exception as e:
+      await self.bot.report_error(
+          message, e, traceback.format_exc(),
+          'please report this error to my github :)')
+
+      await self.bot.send_status(
+        message, self.bot.ui(message)['telegram_error'])
+      return
+
+    pid: int = message.chat.id
+    if pid < 0:
+      pid = norm_cid(-message.chat.id)
+
+    mid = message.id
+    if hasattr(message, 'reply_to_message') and hasattr(message.reply_to_message, 'audio'):
+      mid = message.reply_to_message.id
+
+    await self.play(message, url, {
+      'author': audio.performer if hasattr(audio, 'performer') else None,
+      'title': audio.title if hasattr(audio, 'title') else None,
+      'duration': audio.duration if hasattr(audio, 'duration') else None,
+      'refurl': f'https://t.me/c/{pid}/{mid}'
+    })
