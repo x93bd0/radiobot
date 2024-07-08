@@ -76,7 +76,7 @@ Project Link: [https://github.com/x93bd0/radiobot](https://github.com/x93bd0/rad
 
 ## Acknowledgments
 
-* [Pyrogram](https://github.com/PyrogramMod/PyrogramMod)
+* [KurimuzonAkuma's Pyrogram fork](https://github.com/KurimuzonAkuma/pyrogram)
 * [PyTgCalls](https://github.com/pytgcalls/pytgcalls)
 * [Yt-Dlp](https://github.com/yt-dlp/yt-dlp)
 * [Best-README-Template](https://github.com/othneildrew/Best-README-Template/)
