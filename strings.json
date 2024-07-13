@@ -1,98 +1,34 @@
 {
-  "default": "en",
-
-  "en": {
-    "deftitle": "Player",
-    "fmt": "╔ 🎧 {}\n{}\n╚ 🔗 [Bot Channel](https://t.me/x93dev)",
-
-    "ptitle": "Currently playing",
-    "playing": "{}\n╠ ⏳ Time elapsed: {} / {}",
-    "stopped": "╠ Player left voice chat",
-    "resumed": "╠ Stream resumed",
-    "enqueued": "╠ ⏳ Audio enqueued\n╠  #️⃣ Position #{}\n╠  🔗 [Audio]({})",
-    "paused": "╠ Stream paused",
-    "stream_ended": "╠ Stream ended",
-    "volume_set_to": "╠ 🔊 Volume set to {}%\n╠ ⚠️ Take in account, that this command normally fails due to a Telegram bug",
-
-    "joining_voice": "╠ Joining voice chat",
-    "joining_chat": "╠ Joining chat",
-    "generating_link": "╠ Generating join link",
-
-		"start_playing": "╠ Starting the player",
-  
-    "no_chat": "╠ There's no active voice chat",
-    "no_payload_play": "╠ `/play` command can't be used without any URL",
-    "not_in_voice": "╠ Player is not in the voice chat",
-
-    "cant_generate_link": "╠ Can't generate join link\nℹ️ Check if the bot is admin, and haves the permission to generate them",
-    "cant_join_chat": "╠ Player can't join chat\nℹ️ Check if the player is banned from the chat, if so, unban it",
-
-    "volume_valueerror": "╠ Volume must be an integer value between 1 and 200",
-    "invalid_url": "╠ Invalid audio URL",
-
-    "songfmt_wauthor": "╠ 🎼 #{0} [“{3}” by “{2}”]({1})",
-    "songfmt_nauthor": "╠ 🎼 #{0} [“Audio”]({1})",
-    "pltitle": "Current playlist",
-    "no_author": "Unknown author",
-    "no_title": "Unknown track",
-
-    "start": "» Welcome to RadioBot «\nThis bot was made for streaming music/audio in **Telegram Voice Chats**. It's functionality is easy to understand, being explained in the `/help` command.\n\n» I hope you enjoy my bot, right now, it's a small personal project. I'm not actively developing it, but I'm trying to. You can follow my progress on it in the following [github repository](https://github.com/x93bd0/radiobot), or in [my personal channel](http://t.me/x93dev).\n\n✨ Thank you for using me! ✨",
-    "help": "» Command List «\n» **Start the bot:** /start\n»» Sends a welcome message\n\n» **Retrieve help message:** /help\n»» Sends this message\n\n» **Play something:** /play\n»» Plays whatever you put as an argument (right now, it supports direct links and YouTube links)\n»» __Example:__ `/play https://www.youtube.com/watch?v=DV7J9kwAtOQ`\n\n» **Play next in queue:** /next\n»» Skips the song that's currently being played, and plays the next one\n\n» **Pause the transmission**: /pause\n»» Pauses whatever is being played\n\n» **Resume the transmission:** /resume\n»» Resumes a previously paused transmission\n\n» **Stop the transmission:** /stop\n»» Stops the current session and deletes the playlist\n\n» **Change the transmission volume:** /volume\n»» Changes the transmission volume to the one you pass as an argument\n»» __This command is known for not working correctly, use it at your own risk__\n\n» **Transmission status:** /status\n»» Updates the current playing status message\n\n» **Upcoming songs:** /playlist\n»» Sends a list of upcoming songs in the queue, including the one that's being played",
-
-    "rerror": "<u>» Catched Exception! «</u>\n» Context: `{}`\n```python\n{}```\n\n» **[{}]** __{}__\n```python\n{}```",
-    "remsg": "Message (id:{})\n\tDate {}\n\tUser <{}> (id:{}, @{})\n\t\tLanguage {}\n\tChat <{}> (id:{}, @{})\n\t\tPermissions\n\t\t\t{}\n\tText: \"{}\"",
-
-    "downloading": "╠ 🔽 Downloading track\n╠ ℹ️ Progress {}%\n╠ ➡️ {} MiB / {} MiB",
-    "download": "╠ 🆗 Downloaded!",
-    "telegram_error": "╠ ❌ An internal error ocurred! (Download error from Telegram)",
-    "max_fsize_exc": "╠ ❌ You tried to play an audio that exceeds our internal file size limitation ({} MiB)"
-  },
-
-  "es": {
-    "deftitle": "Reproductor",
-    "fmt": "╔ 🎧 {}\n{}\n╚ 🔗 [Canal del Bot](https://t.me/x93dev)",
-
-    "ptitle": "Reproduciendo",
-    "playing": "{}\n╠ ⏳ Tiempo: {}",
-    "stopped": "╠  Reproducción terminada",
-    "resumed": "╠ Reproducción resumida",
-    "enqueued": "╠ ⏳ Audio puesto en cola\n╠ #️⃣ Posición #{}\n╠ 🔗 [Audio]({})",
-
-    "paused": "╠ Reproducción pausada",
-    "stream_ended": "╠ Reproducción finalizada",
-    "volume_set_to": "╠ 🆕 Volumen: {}%\n╠ ⚠️ Tenga en cuenta que este comando\n╠        puede fallar por un bug de Telegram",
-
-    "joining_voice": "╠ Uniéndose al chat de voz",
-    "joining_chat": "╠ Uniéndose al chat",
-    "generating_link": "╠ Generando invitación al chat",
-
-		"start_playing": "╠ Iniciando el reproductor",
-
-    "no_chat": "╠ No hay ningún chat de voz activo",
-    "no_payload_play": "╠ El comando `/play` no puede ser usado sin ninguna URL",
-    "not_in_voice": "╠ No se está reproduciendo nada",
-
-    "cant_generate_link": "╠ ¡No se puede generar el enlace de invitación!\nℹ️ El bot necesita ser administrador y debe tener la opción de `Invitar usuarios vía Link` activada",
-    "cant_join_chat": "╠ El usuario ´Player´ no se puede unir al chat\nℹ️ Si el usuario fue baneado previamente del chat, se le debe eliminar de la lista de usuarios baneados",
-
-    "volume_valueerror": "╠ El valor del volumen debe ser un número entre el 1 y el 200",
-    "invalid_url": "╠ La URL del audio es inválida",
-
-    "songfmt_wauthor": "╠ 🎼 #{0} [“{3}” de “{2}”]({1})",
-    "songfmt_nauthor": "╠ 🎼 #{0} [“Audio”]({1})",
-    "pltitle": "Lista de reproducción actual",
-    "no_author": "Artista desconocido",
-    "no_title": "Pista desconocida",
-
-    "start": "» Bienvenido a RadioBot «\nEste bot fue desarrollado para poder transmitir música y/o audio en los **chats de voz de Telegram**. Su funcionamiento es fácil de comprender, siendo explicado en el comando `/help`.\n\n» Espero que disfrutes mi bot, el cual ahora es solo un pequeño proyecto personal. No lo estoy desarrollando activamente, pero estoy tratando de hacerlo. Puedes seguir el proceso de desarrollo en el siguiente [repositorio de github](https://github.com/x93bd0/radiobot), o en mi [canal personal](http://t.me/x93dev).\n\n✨ ¡Gracias por usarme! ✨",
-    "help": "» Lista de comandos «\n» **Iniciar el bot:** /start\n»» Envía un mensaje de bienvenida\n\n» **Obtener mensaje de ayuda:** /help\n»» Envía este mensaje\n\n» **Reproducir algo...:** /play\n»» Reproduce cualquier cosa que le pases como argumento (por ahora solo soporta links directos y de YouTube)\n»» __Ejemplo:__ `/play https://www.youtube.com/watch?v=DV7J9kwAtOQ`\n\n» **Reproduce la siguiente canción:** /next\n»» Cambia la canción que se está reproduciendo actualmente por la siguiente en cola\n\n» **Pausar la transmisión**: /pause\n»» Pausa lo que esté siendo reproducido\n\n» **Resumir la transmisión:** /resume\n»» Resume una transmisión que fue pausada anteriormente\n\n» **Detener la transmisión:** /stop\n»» Detiene la transmisión y elimina la lista de reproducción\n\n» **Cambiar el volumen de la transmisión:** /volume\n»» Cambia el volumen de la transmisión actual por el que se le pase como argumento\n»» __Este comando no funciona siempre como debería, uselo bajo su propia responsabilidad__\n\n» **Estado de la reproducción:** /status\n»» Actualiza el mensaje de estado de reproducción\n\n» **Canciones pendientes:** /playlist\n»» Envía una lista con las canciones que falten por reproducir en la lista de reproducción, incluyendo la canción actual.",
-
-    "rerror": "<u>» ¡Excepción Capturada! «</u>\n» Contexto: `{}`\n```python\n{}```\n\n» **[{}]** __{}__\n```python\n{}```",
-    "remsg": "Mensaje (id:{})\n\tFecha {}\n\tUsuario <{}> (id:{}, @{})\n\t\tLenguaje {}\n\tChat <{}> (id:{}, @{})\n\t\tPermisos\n\t\t\t{}\n\tTexto: \"{}\"",
-
-    "downloading": "╠ 🔽 Descargando pista\n╠ ℹ️ Progreso {}%\n╠ ➡️ {} MiB / {} MiB",
-    "download": "╠ 🆗 ¡Descargada!",
-    "telegram_error": "╠ ❌ ¡Ocurrió algo internamente! (Error de descarga por parte de Telegram)",
-    "max_fsize_exc": "╠ ❌ Usted intentó reproducir un audio que excede nuestro límite interno de tamaño ({} MiB)"
-  }
+	"default": "en",
+	"en": {
+		"pl_enqueued": "⏳ Audio enqueued\n{}",
+		"pl_joining": "Joining voice chat",
+		"pl_glink": "Generating join link",
+		"pl_cglink": "Can't generate join link\nℹ️ Check if the bot is admin, and haves the permission to generate them",
+		"pl_joiningc": "Joining chat",
+		"pl_cjoin": "Player can't join chat\nℹ️ Check if the player is banned from the chat, if so, unban it",
+		"pl_splaying": "Starting the player",
+		"pl_novoice": "There's no active voice chat",
+		"pl_retry": "Something bad happened 😖\nPlease try again...",
+		"pl_ended": "Stream ended",
+		"gd_container": "╔ 🎧 {title}\n{content}\n╚ 🔗 [Bot Channel](https://t.me/x93dev)",
+		"gd_deftitle": "RadioBot",
+		"gd_noauthor": "Unknown Author",
+		"gd_notitle": "Unknown Track",
+		"gd_noalbum": "Unknown Album",
+		"gd_nogenre": "Unknown Genre",
+		"gd_noyear": "????",
+		"gd_nolcst": "Unknown writer(s)",
+		"gd_sdata": "👨‍🎤 __{author}__\n✍️ __{lyricist}__\n🎼 __[\"{title}\"]({url})__ **from** __\"{album}\"__\n{year} ■ {genre}\n\n⏳ **[**__{elapsed} / {duration}__**]**",
+		"gd_simpledata": "__[\"{title}\"]({url})__ **by** __\"{author}\"__\n{year} ■ {genre} ■ {duration}",
+		"gpl_nopayload": "`/play` command can't be used without any URL",
+		"gpl_invalidurl": "Invalid audio URL",
+		"gpl_paused": "Stream paused",
+		"gpl_resumed": "Stream resumed",
+		"gpl_volvale": "`Volume` must have an integer value between 0 and 200",
+		"gpl_volupd": "🔊 Volume set to {}%\n⚠️ Take in account, that this command normally fails due to a Telegram bug",
+		"gpl_stopped": "Player left voice chat",
+		"gpl_playlist": "🎼 Playlist\n{}",
+		"gpl_nonext": "There isn't any remaining songs to play"
+	}
 }

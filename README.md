@@ -26,19 +26,21 @@
 </div>
 
 ## About The Project
-RadioBot is a simple [Telegram](https://telegram.org/) bot, for playing audio's and managing playlists on [Telegram Voice Chats](https://telegram.org/blog/voice-chats) easily. It's built with simplicity and efficiency in mind (altrought right now is isn't).
+RadioBot is a simple modular [Telegram](https://telegram.org/) bot, for playing audio's and managing playlists on [Telegram Voice Chats](https://telegram.org/blog/voice-chats) easily. It's built with simplicity and efficiency in mind.
 
 It packs some necessary features for it to be a complete audio player experience:
 * Expected functionality: **Play**, **Stop**, **Next**, **Pause**, **Resume**, **Volume**
 * Managing of Playlists: **See current playlist**, ([WIP]: **Export current playlist**, **Load exported playlist**)
-* Playing from **numerous sites** (*using Yt-Dlp*), from **direct links** and from **Telegram audio files**
+* Playing from **numerous sites** (*using Yt-Dlp*), from **direct links**
+* [WIP] Playing from Telegram audio files
 * [WIP] Internationalization
 * [WIP] Ability to play audio on channels voice chats
 * [WIP] Role management suite (for allowing users that aren't the group owners/moderators to control the player behaviour)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-## Installation
+## Installation [WIP]
+
 1. Get your API id & hash from my.telegram.org
 2. Create a file called .env and put your id & hash there
    ```env

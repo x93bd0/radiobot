@@ -1,5 +1,9 @@
 git+https://github.com/KurimuzonAkuma/pyrogram
-tgcrypto
+asyncpg
 yt-dlp
+tgcrypto
 validators
 py-tgcalls
+python-dotenv
+uvloop
+click
