@@ -12,7 +12,7 @@ from stub import *
 class Module:
   def __init__(self, bot: 'MainClient'):
     self.bot: 'MainClient' = bot
-    self.ustorage: Optional['Module'] = None
+    self.ustorage: Optional['Storage'] = None
 
   async def install(self):
     common = filters.group
@@ -218,15 +218,20 @@ class Module:
     self, client: 'MainClient',
     message: Message, context: 'Context'
   ) -> Optional[bool]:
-    await self.goodies.report_error(context, Exception('Juan'), 'xd', 'owo:2')
     if not context.voice_id:
       await self.goodies.update_status(
         context, self.bot.i18n[context]['pl_novoice'])
       return False
 
-    data: List['SongData'] = await self.ustorage.pl_fetch(
+    pos: Optional[int] = await self.ustorage.pl_position(
       context.voice_id)
-    if not data:
+
+    data: List['SongData']
+    if pos:
+      data = await self.ustorage.pl_fetch(
+        context.voice_id, offset=pos)
+
+    if not pos or not data:
       await self.goodies.update_status(
         context, self.bot.i18n[context]['gpl_nonext'])
       return
@@ -234,9 +239,11 @@ class Module:
     await self.goodies.update_status(
       context, self.bot.i18n[context]['gpl_playlist'].format(
         '\n\n'.join([
-          self.goodies.format_sd(
-            context, x, key='gd_simpledata'
-          ) for x in data
+          self.bot.i18n[context]['gpl_placeholder'].format(
+            no=1 + pos + x,
+            data=self.goodies.format_sd(
+              context, data[x], key='gd_simpledata')
+          ) for x in range(0, len(data))
         ])
       )
     )

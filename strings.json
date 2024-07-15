@@ -24,6 +24,7 @@
 		"gd_report": "<u>» Catched Exception! «</u>\n» Context:\n```python\nRaised inside '{method}'\nVoiceID: {ctx_voice_id}\nLogID: {ctx_log_id}\nStatusID: {ctx_statusid}\nLangCode: {ctx_langcode}\n\nLogging Enabled?: {ctx_logging}\n```\n\n» **[{excname}]** __{excdata}__\n\n```python\n{trace}```",
 		"gd_b1": "True",
 		"gd_b0": "False",
+
 		"gpl_nopayload": "`/play` command can't be used without any URL",
 		"gpl_invalidurl": "Invalid audio URL",
 		"gpl_paused": "Stream paused",
@@ -32,6 +33,7 @@
 		"gpl_volupd": "🔊 Volume set to {}%\n⚠️ Take in account, that this command normally fails due to a Telegram bug",
 		"gpl_stopped": "Player left voice chat",
 		"gpl_playlist": "🎼 Playlist\n{}",
+		"gpl_placeholder": "{no}. {data}",
 		"gpl_nonext": "There isn't any remaining songs to play"
 	}
 }
