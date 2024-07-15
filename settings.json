@@ -1,0 +1,10 @@
+{
+    "Goodies_YTParseName": true,
+    "Goodies_ReportErrorID": 1211166567,
+    
+    "Ustorage_Modules": [
+        "modules.stmods.playlist",
+        "modules.stmods.context",
+        "modules.stmods.lock"
+    ]
+}

@@ -2,7 +2,6 @@ from pytgcalls.exceptions import NotInCallError, NoActiveGroupCall
 from pyrogram.handlers.message_handler import MessageHandler
 from typing import Optional, Dict, List
 from pyrogram.types import Message
-from pyrogram.client import Client
 from pyrogram import filters
 import validators
 
@@ -11,8 +10,8 @@ from stub import *
 
 
 class Module:
-  def __init__(self, bot: Client):
-    self.bot: Client = bot
+  def __init__(self, bot: 'MainClient'):
+    self.bot: 'MainClient' = bot
     self.ustorage: Optional['Module'] = None
 
   async def install(self):
@@ -69,8 +68,9 @@ class Module:
     self.player = self.bot.player
     self.goodies = self.bot.goodies
 
+
   async def play(
-    self, client: Client,
+    self, client: 'MainClient',
     message: Message, context: 'Context'
   ) -> None:
     if not context.voice_id:
@@ -99,7 +99,7 @@ class Module:
       pass
 
   async def pause(
-    self, client: Client,
+    self, client: 'MainClient',
     message: Message, context: 'Context'
   ) -> Optional[bool]:
     if not context.voice_id:
@@ -118,7 +118,7 @@ class Module:
       return False
 
   async def resume(
-    self, client: Client,
+    self, client: 'MainClient',
     message: Message, context: 'Context'
   ) -> Optional[bool]:
     if not context.voice_id:
@@ -137,7 +137,7 @@ class Module:
       return False
 
   async def next(
-    self, client: Client,
+    self, client: 'MainClient',
     message: Message, context: 'Context'
   ) -> Optional[bool]:
     if not context.voice_id:
@@ -154,7 +154,7 @@ class Module:
       return False
 
   async def volume(
-    self, client: Client,
+    self, client: 'MainClient',
     message: Message, context: 'Context'
   ) -> Optional[bool]:
     if not context.voice_id:
@@ -185,7 +185,7 @@ class Module:
       return False
 
   async def stop(
-    self, client: Client,
+    self, client: 'MainClient',
     message: Message, context: 'Context'
   ) -> Optional[bool]:
     if not context.voice_id:
@@ -205,7 +205,7 @@ class Module:
     return False
 
   async def status(
-    self, client: Client,
+    self, client: 'MainClient',
     message: Message, context: 'Context'
   ) -> Optional[bool]:
     if not context.voice_id:
@@ -215,9 +215,10 @@ class Module:
     await self.player.status(context)
 
   async def playlist(
-    self, client: Client,
+    self, client: 'MainClient',
     message: Message, context: 'Context'
   ) -> Optional[bool]:
+    await self.goodies.report_error(context, Exception('Juan'), 'xd', 'owo:2')
     if not context.voice_id:
       await self.goodies.update_status(
         context, self.bot.i18n[context]['pl_novoice'])

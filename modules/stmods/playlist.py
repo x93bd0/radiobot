@@ -1,7 +1,5 @@
 from typing import Tuple, Optional, List, Dict, Callable, Any
-from pyrogram.client import Client
 from dataclasses import dataclass
-from datetime import datetime
 from asyncpg import Record
 
 # For linting
@@ -25,8 +23,8 @@ SongDataTuple = Tuple[str, str, str, str, int, str, int, str]
 
 
 class UModule:
-  def __init__(self, bot: Client, db: 'Storage'):
-    self.bot: Client = bot
+  def __init__(self, bot: 'MainClient', db: 'Storage'):
+    self.bot: 'MainClient' = bot
     self.db: 'Storage' = db
     self.SongData = SongData
 
@@ -177,6 +175,7 @@ class UModule:
         WHERE voice_id = $1;
       '''
 
+
   async def pl_enqueue(
     self, voice_id: int,
     data: SongData
@@ -260,7 +259,8 @@ class UModule:
         position = row['position']
     return position
 
-  def stub(self, root: Dict[str, Any]):
+
+  def stub(self, root: Dict[str, Any]) -> None:
     root['ustorage'].update({
       'SongData': {
         '__name__': 'SongData',
@@ -272,5 +272,13 @@ class UModule:
         'lyricist': str,
         'duration': int,
         'url': str
-      }
+      },
+
+      'pl_default_data': Callable[[], 'SongData'],
+      'pl_enqueue': Callable[[int, 'SongData'], None],
+      'pl_dequeue': Callable[[int], Optional[Tuple[int, 'SongData']]],
+      'pl_clean': Callable[[int], None],
+      'pl_fetch': Callable[[int, int, Optional[int]], List['SongData']],
+      'pl_position': Callable[[int], Optional[int]],
+      'pl_size': Callable[[int], Optional[int]]
     })

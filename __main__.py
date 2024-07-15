@@ -16,21 +16,12 @@ from stub import *
 
 
 default_config = {
-  'bot_invite_link_name': 'RadioBot link',
-  'youtube_sname_parsing': True,
-
   'i18n_strings': 'strings.json',
   'modules': [
     'modules.ustorage',
     'modules.goodies',
     'modules.player',
     'modules.groupui'
-  ],
-
-  'ustorage_mods': [
-    'modules.stmods.playlist',
-    'modules.stmods.context',
-    'modules.stmods.lock'
   ]
 }
 
@@ -61,13 +52,25 @@ class MainClient(Client):
     self.ubot: Optional[Client] = None
     self.api: Optional[PyTgCalls] = None
     self.i18n: Optional[i18n] = None
+  
+  def register_configs(
+    self, param: str | List[str],
+    default: Any | list[Any]
+  ) -> None:
+    if isinstance(param, str):
+      if param not in self.config:
+        self.config[param] = default
+      return
+
+    for p in range(0, len(param)):
+      if param[p] not in self.config:
+        self.config[param[p]] = default[p]
 
 
 class MainAPI(PyTgCalls):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
     self.mainbot: Optional[MainClient] = None
-
 
 
 async def _setup() -> MainClient:
@@ -86,8 +89,8 @@ async def _setup() -> MainClient:
     logging.basicConfig(level=logging.INFO)
 
   config: Dict[str, Any] = default_config
-  if os.path.isfile('config.json'):
-    with open('config.json') as cfg:
+  if os.path.isfile('settings.json'):
+    with open('settings.json') as cfg:
       config.update(json.load(cfg))
 
   bot: MainClient = MainClient(
@@ -99,33 +102,6 @@ async def _setup() -> MainClient:
     api_id=envars['TG_API_ID'],
     api_hash=envars['TG_API_HASH'],
     name=envars['CLIENT_NAME'] + '_userbot')
-  if os.getenv('DEBUG', False):
-    logging.basicConfig(level=logging.INFO)
-
-  config: Dict[str, Any] = default_config
-  if os.path.isfile('config.json'):
-    with open('config.json') as cfg:
-      config.update(json.load(cfg))
-
-  config: Dict[str, Any] = default_config
-  if os.path.isfile('config.json'):
-    with open('config.json') as cfg:
-      config.update(json.load(cfg))
-
-  bot: MainClient = MainClient(
-    api_id=envars['TG_API_ID'],
-    api_hash=envars['TG_API_HASH'],
-    name=envars['CLIENT_NAME'])
-
-  bot.ubot = Client(
-    api_id=envars['TG_API_ID'],
-    api_hash=envars['TG_API_HASH'],
-    name=envars['CLIENT_NAME'] + '_userbot')
-
-  bot.api = MainAPI(bot.ubot)
-  bot.api.mainbot = bot
-  bot.config.update(config)
-  bot.i18n = i18n(bot)
 
   bot.api = MainAPI(bot.ubot)
   bot.api.mainbot = bot
@@ -175,6 +151,7 @@ async def main(setup: bool, test: bool):
   logging.info('Idling...')
   await idle()
 
+
 async def generate_stub():
   bot: MainClient = await _setup()
   logging.info('Starting to generate stub\'s')
@@ -182,10 +159,11 @@ async def generate_stub():
   root: Dict[str, Any] = {
     'bot': {
       '__name__': 'MainClient',
+      'register_configs': Callable[[str | List[str], Any | List[Any]], None],
       'i18n': {
         '__name__': 'i18n',
-        'default': str,
-        '__getitem__': Callable[['Context'], Dict[str, str]]
+        '__getitem__': Callable[['Context'], Dict[str, str]],
+        'default': str
       },
     },
     'Module': {
@@ -208,25 +186,31 @@ async def generate_stub():
 
   logging.info('`stub.py` generated correctly')
 
+
 @click.group()
 def cli():
   pass
+
 
 @cli.command()
 def run():
   asyncio.run(main(False, False))
 
+
 @cli.command()
 def setup():
   asyncio.run(main(True, False))
+
 
 @cli.command()
 def test():
   asyncio.run(main(False, True))
 
+
 @cli.command()
 def stub():
   asyncio.run(generate_stub())
+
 
 if __name__ == '__main__':
   uvloop.install()

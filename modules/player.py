@@ -14,7 +14,6 @@ from pytgcalls.exceptions import (
 from typing import Optional, Tuple, List, Callable, Dict, Any
 from pytgcalls.types import MediaStream, AudioQuality
 from pyrogram.types import ChatInviteLink
-from pyrogram.client import Client
 from ntgcalls import FFmpegError
 from pytgcalls import PyTgCalls
 import traceback
@@ -38,9 +37,9 @@ class PlayerStatus(enum.Enum):
 
 
 class Module:
-  def __init__(self, bot: Client):
-    self.bot: Client = bot
-    self.ubot: Client = self.bot.ubot
+  def __init__(self, bot: 'MainClient'):
+    self.bot: 'MainClient' = bot
+    self.ubot: 'MainClient' = self.bot.ubot
 
     self.Status = PlayerStatus
     self.api: PyTgCalls = bot.api
@@ -48,10 +47,16 @@ class Module:
 
   async def install(self) -> None:
     self.bot.player = self
+    self.bot.register_configs([
+      'Player_InviteLink'
+    ], [
+      'RadioBot'
+    ])
 
   async def post_install(self) -> None:
     self.goodies = self.bot.goodies
     self.ustorage = self.bot.ustorage
+
 
   async def play(
     self, context: 'Context',
@@ -79,7 +84,7 @@ class Module:
       try:
         link = await self.bot.create_chat_invite_link(
           context.voice_id, member_limit=1,
-          name=self.bot.config['bot_invite_link_name'])
+          name=self.bot.config['Player_InviteLink'])
 
       except ChatAdminRequired:
         await self.goodies.update_status(
@@ -221,6 +226,7 @@ class Module:
       ))
     return PlayerStatus.OK
 
+
   def stub(self, root: Dict[str, Any]):
     root['bot'].update({
       'player': {
@@ -231,6 +237,7 @@ class Module:
         'resume': Callable[['Context'], None],
         'next': Callable[['Context'], 'PlayerStatus'],
         'status': Callable[['Context'], 'PlayerStatus'],
+
         'PlayerStatus': {
           '__name__': 'PlayerStatus',
           'ENQUEUED': int,

@@ -1,5 +1,4 @@
 from typing import Optional, Any, Dict, List, Callable
-from pyrogram.client import Client
 from asyncpg.pool import Pool
 import importlib
 import asyncpg
@@ -12,8 +11,8 @@ from stub import *
 
 # Just a container
 class Module:
-  def __init__(self, bot: Client):
-    self.bot: Client = bot
+  def __init__(self, bot: 'MainClient'):
+    self.bot: 'MainClient' = bot
     self.pool: Optional[Pool] = None
 
   async def install(self) -> None:
@@ -27,7 +26,7 @@ class Module:
 
     self.bot.ustorage = self
     self.modules: List[Module] = []
-    for mod in self.bot.config['ustorage_mods']:
+    for mod in self.bot.config['Ustorage_Modules']:
       logging.info(f'Installing ustorage module `{mod}`')
       module: 'UModule' = importlib.import_module(mod).UModule(
         self.bot, self)
@@ -52,6 +51,7 @@ class Module:
         logging.info(f'- Testing ustorage[{mod.path}]')
         await mod.test()
 
+
   def stub(self, root: Dict[str, Any]) -> None:
     root['ustorage'] = {
       '__name__': 'Storage',
@@ -72,7 +72,7 @@ class Module:
       'ustorage': 'Storage'
     })
 
-    for mod in self.bot.config['ustorage_mods']:
+    for mod in self.bot.config['Ustorage_Modules']:
       logging.info(f'Generating stub for ustorage module `{mod}`')
       module: 'UModule' = importlib.import_module(mod).UModule(self.bot, self)
       if hasattr(module, 'stub'):

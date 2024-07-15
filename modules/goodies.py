@@ -5,7 +5,6 @@ from pyrogram.errors.exceptions.bad_request_400 import (
 
 from typing import Dict, Optional, List
 from pyrogram.types import Message
-from pyrogram.client import Client
 from datetime import datetime
 from yt_dlp import YoutubeDL
 import re
@@ -20,11 +19,18 @@ ytdl: YoutubeDL = YoutubeDL()
 
 
 class Module:
-  def __init__(self, bot: Client):
-    self.bot: Client = bot
+  def __init__(self, bot: 'MainClient'):
+    self.bot: 'MainClient' = bot
 
   async def install(self) -> None:
     self.bot.goodies = self
+    self.bot.register_configs([
+      'Goodies_YTParseName',
+      'Goodies_ReportErrorID'
+    ], [
+      True, -1
+    ])
+
 
   def format_duration(
     self, time: int
@@ -133,7 +139,7 @@ class Module:
 
         title = info['title']
         duration = info['duration']
-        if self.bot.config.get('youtube_sname_parsing', True):
+        if self.bot.config['Goodies_YTParseName']:
           if title.lower().startswith(author.lower()):
             if ' - ' in title:
               sp = title.split(' - ', 1)
@@ -158,6 +164,26 @@ class Module:
     self, context: 'Context', exc: Exception,
     trace: str, method: str
   ) -> None:
-    print(f'OPTIMISTICALLY I THOUGHT THIS WOULD NEVER BE CALLED (from {method})')
-    print(f'  {type(exc).__name__}: {str(exc)}')
-    print(trace)
+    rid: int = int(self.bot.config['Goodies_ReportErrorID'])
+    if rid == -1:
+      print('NO REPORT ID (settings.json:Goodies_ReportErrorID) DEFINED')
+      print('- REPORTING ERROR TO STANDARD OUTPUT:')
+      print(f'FROM `{method}` GOT {type(exc).__name__}: {str(exc)}')
+      print(trace)
+      return
+
+    await self.bot.send_message(
+      chat_id=rid,
+      text=self.bot.i18n[context]['gd_report'].format(
+        method=method,
+        excname=type(exc).__name__,
+        excdata=str(exc),
+        trace=trace,
+        
+        ctx_voice_id=context.voice_id,
+        ctx_log_id=context.log_id,
+        ctx_logging=self.bot.i18n[context]['gd_b' + str(int(context.logging))],
+        ctx_statusid=context.status_id,
+        ctx_langcode=context.lang_code
+      )
+    )

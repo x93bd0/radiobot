@@ -1,8 +1,8 @@
 from typing import Optional, Tuple, Callable, Any, Union, List, Dict
 from pyrogram.types import Message, CallbackQuery
-from pyrogram.client import Client
 from dataclasses import dataclass
 from asyncpg import Record
+from pyrogram import Client
 
 # For linting
 from stub import *
@@ -20,8 +20,8 @@ ContextTuple = Tuple[int, bool, str, int]
 
 
 class UModule:
-  def __init__(self, bot: Client, db: 'Storage'):
-    self.bot: Client = bot
+  def __init__(self, bot: 'MainClient', db: 'Storage'):
+    self.bot: 'MainClient' = bot
     self.db: 'Storage' = db
     self.Context = Context
 
@@ -117,9 +117,10 @@ class UModule:
       WHERE voice_id = $1
     '''
 
+
   def Contextualize(self, method: Callable, auto_update: bool = True) -> Callable:
     async def middle(
-      client: Client, update: Union[Message, CallbackQuery]
+      client: 'MainClient', update: Union[Message, CallbackQuery]
     ) -> Any:
       if isinstance(update, Message):
         chat_id: int = update.chat.id
@@ -241,6 +242,7 @@ class UModule:
       async with conn.transaction():
         await conn.execute(
           self.query_delete, voice_id)
+
 
   def stub(self, root: Dict[str, Any]) -> None:
     root['ustorage'].update({

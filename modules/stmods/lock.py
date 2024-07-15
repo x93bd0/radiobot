@@ -1,5 +1,4 @@
-from typing import Callable, Tuple, Any, Optional
-from pyrogram.client import Client
+from typing import Callable, Tuple, Any, Optional, Dict
 from dataclasses import dataclass
 from datetime import datetime
 from asyncpg import Record
@@ -19,9 +18,15 @@ ChatLockTuple = Tuple[int, int]
 
 
 class UModule:
-  def __init__(self, bot: Client, db: 'Storage'):
-    self.bot: Client = bot
+  def __init__(self, bot: 'MainClient', db: 'Storage'):
+    self.bot: 'MainClient' = bot
     self.db: 'Storage' = db
+
+  async def install(self) -> None:
+    self.db.lock_chat = self.lock_chat
+    self.db.unlock_chat = self.unlock_chat
+    self.db.lock_time = self.lock_time
+    self.db.UseLock = self.UseLock
 
   async def setup(self) -> None:
     async with self.db.pool.acquire() as conn:
@@ -42,12 +47,6 @@ class UModule:
             data Telegram.LockData
           );
         ''')
-
-  async def install(self) -> None:
-    self.db.lock_chat = self.lock_chat
-    self.db.unlock_chat = self.unlock_chat
-    self.db.lock_time = self.lock_time
-    self.db.UseLock = self.UseLock
 
   async def post_install(self) -> None:
     def encoder(data: ChatLock) -> ChatLockTuple:
@@ -89,6 +88,7 @@ class UModule:
       DELETE FROM Telegram.ChatLock
       WHERE voice_id=$1
     '''
+
 
   async def lock_chat(
     self, context: 'Context',
@@ -154,3 +154,16 @@ class UModule:
         await self.unlock_chat(context)
       return data
     return new_method
+
+
+  def stub(self, root: Dict[str, Any]) -> None:
+    self.db.lock_chat = self.lock_chat
+    self.db.unlock_chat = self.unlock_chat
+    self.db.lock_time = self.lock_time
+    self.db.UseLock = self.UseLock
+    root['ustorage'].update({
+      'lock_chat': Callable[['Context', int], float],
+      'unlock_chat': Callable[['Context'], None],
+      'lock_time': Callable[['Context'], Optional[float]],
+      'UseLock': Callable[[Callable, int], Callable]
+    })
