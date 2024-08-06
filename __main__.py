@@ -1,217 +1,185 @@
-from typing import Dict, Any, Optional, Union, List, Callable
-from pyrogram.client import Client
-from pytgcalls import PyTgCalls
-from pyrogram.sync import idle
-from dotenv import load_dotenv
-import importlib
+"""
+    Main Bot Code
+"""
+
+from typing import Dict, Any, Optional, List, Callable
 import os.path
+import importlib
 import logging
 import asyncio
+import json
 import uvloop
 import click
-import json
+
+from pyrogram.client import Client
+from pyrogram.sync import idle
+
+from pytgcalls import PyTgCalls
+from dotenv import load_dotenv
 
 # For linting
-from stub import *
+from stub import MetaClient, MetaModule, MainException
 
 
-default_config = {
-  'i18n_strings': 'strings.json',
-  'modules': [
-    'modules.ustorage',
-    'modules.goodies',
-    'modules.player',
-    'modules.groupui'
-  ]
-}
+class MainClient(MetaClient):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.modules: dict[str, MetaModule] = {}
+        self.config: dict[str, Any] = {}
+        self.defby: dict[str, MetaModule] = {}
 
+        self.userbot: Optional[Client] = None
+        self.api: Optional[PyTgCalls] = None
 
-class i18n:
-  def __init__(self, bot: 'MainClient'):
-    # TODO: better practice for getting first key
-    with open(bot.config['i18n_strings']) as i18n:
-      temp: Dict[str, Union[str, Dict[str, str]]] = \
-        json.load(i18n)
+    def register_configuration(
+        self, module: MetaModule,
+        config: dict[str, dict[str, str]],
+        check_collisions: bool = False
+    ) -> None:
+        for k, v in config.items():
+            if k not in self.config:
+                self.config[k] = v
+                self.defby[k] = module.identifier
 
-      if 'default' in temp:
-        self.default: str = str(temp['default'])
-        temp.pop('default')
-
-      else:
-        self.default: str = [*temp.keys()][0]
-      self.strings: Dict[str, Dict[str, str]] = temp # type: ignore
-
-  def __getitem__(self, key: 'Context') -> Dict[str, str]:
-    return self.strings.get(key.lang_code, self.strings[self.default])    
-
-
-class MainClient(Client):
-  def __init__(self, *args, **kwargs):
-    super().__init__(*args, **kwargs)
-    self.config: Dict[str, Any] = {}
-    self.ubot: Optional[Client] = None
-    self.api: Optional[PyTgCalls] = None
-    self.i18n: Optional[i18n] = None
-  
-  def register_configs(
-    self, param: str | List[str],
-    default: Any | list[Any]
-  ) -> None:
-    if isinstance(param, str):
-      if param not in self.config:
-        self.config[param] = default
-      return
-
-    for p in range(0, len(param)):
-      if param[p] not in self.config:
-        self.config[param[p]] = default[p]
+            elif check_collisions:
+                if k in self.defby:
+                    raise MainException(
+                        f'Configuration `{k}` is already used by module ' +
+                        f'`{self.defby[k].identifier}`' +
+                        f'(requested by `{module.identifier}`)'
+                    )
 
 
 class MainAPI(PyTgCalls):
-  def __init__(self, *args, **kwargs):
-    super().__init__(*args, **kwargs)
-    self.mainbot: Optional[MainClient] = None
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.mainbot: Optional[MainClient] = None
 
 
 async def _setup() -> MainClient:
-  load_dotenv()
-  envars: Dict[str, str] = {}
-  for var in ['CLIENT_NAME', 'TG_API_ID', 'TG_API_HASH']:
-    if var not in os.environ:
-      raise Exception(
-        f'Unset `{var}` environmental variable'
-        ' is required for startup (it is not in .env)'
-      )
+    load_dotenv()
+    envars: Dict[str, str] = {}
+    for var in ['CLIENT_NAME', 'TG_API_ID', 'TG_API_HASH']:
+        if var not in os.environ:
+            raise MainException(
+                f'Unset `{var}` environmental variable'
+                ' is required for startup (it is not in .env)'
+            )
 
-    envars[var] = os.environ[var]
+        envars[var] = os.environ[var]
 
-  if os.getenv('DEBUG', False):
-    logging.basicConfig(level=logging.INFO)
+    if os.getenv('DEBUG', ''):
+        logging.basicConfig(level=logging.INFO)
 
-  config: Dict[str, Any] = default_config
-  if os.path.isfile('settings.json'):
-    with open('settings.json') as cfg:
-      config.update(json.load(cfg))
+    config: Dict[str, Any] = {}
+    if os.path.isfile('settings.json'):
+        with open('settings.json', encoding='utf-8') as cfg:
+            config.update(json.load(cfg))
 
-  bot: MainClient = MainClient(
-    api_id=envars['TG_API_ID'],
-    api_hash=envars['TG_API_HASH'],
-    name=envars['CLIENT_NAME'])
+    bot: MainClient = MainClient(
+        api_id=envars['TG_API_ID'],
+        api_hash=envars['TG_API_HASH'],
+        name=envars['CLIENT_NAME'])
 
-  bot.ubot = Client(
-    api_id=envars['TG_API_ID'],
-    api_hash=envars['TG_API_HASH'],
-    name=envars['CLIENT_NAME'] + '_userbot')
+    bot.userbot = Client(
+        api_id=envars['TG_API_ID'],
+        api_hash=envars['TG_API_HASH'],
+        name=envars['CLIENT_NAME'] + '_userbot')
 
-  bot.api = MainAPI(bot.ubot)
-  bot.api.mainbot = bot
-  bot.config.update(config)
-  bot.i18n = i18n(bot)
+    bot.api = MainAPI(bot.userbot)
+    bot.api.mainbot = bot
+    bot.config.update(config)
 
-  return bot
+    return bot
 
 
 async def main(setup: bool, test: bool):
-  bot: MainClient = await _setup()
+    bot: MainClient = await _setup()
 
-  modules: List['Module'] = []
-  for mod in bot.config['modules']:
-    logging.info(f'Installing module `{mod}`')
-    module: 'Module' = importlib.import_module(mod).Module(bot)
-    module.path = mod
-    await module.install()
-    modules.append(module)
+    modules: List[MetaModule] = []
+    for mod in bot.config['BaseModules']:
+        logging.info('Installing module `%s`', mod)
+        module: MetaModule = importlib.import_module(mod).Module(bot)
+        module.path = mod
+        await module.install()
+        modules.append(module)
 
-  if setup:
+        bot.modules[module.identifier] = module
+
+    if setup:
+        for mod in modules:
+            if hasattr(mod, 'setup'):
+                logging.info('Setting up `%s`', mod.path)
+                await mod.setup()
+
+        logging.info('Setup sequence ended! Quitting...')
+        return
+
     for mod in modules:
-      if hasattr(mod, 'setup'):
-        logging.info(f'Setting up `{mod.path}`')
-        await mod.setup()
+        if hasattr(mod, 'post_install'):
+            await mod.post_install()
 
-    logging.info('Setup sequence ended! Quitting...')
-    return
+    if test:
+        for mod in modules:
+            if hasattr(mod, 'test'):
+                logging.info('Testing `%s`', mod.path)
+                await mod.test()
 
-  for mod in modules:
-    if hasattr(mod, 'post_install'):
-      await mod.post_install()
+        logging.info('Test sequence ended! Quitting...')
+        return
 
-  if test:
-    for mod in modules:
-      if hasattr(mod, 'test'):
-        logging.info(f'Testing {mod.path}')
-        await mod.test()
-
-    logging.info('Test sequence ended! Quitting...')
-    return
-
-  logging.info('Starting bot...')
-  await bot.start()
-  logging.info('Starting userbot api...')
-  await bot.api.start()
-  logging.info('Idling...')
-  await idle()
+    logging.info('Starting bot...')
+    await bot.start()
+    logging.info('Starting userbot api...')
+    await bot.api.start()
+    logging.info('Idling...')
+    await idle()
 
 
 async def generate_stub():
-  bot: MainClient = await _setup()
-  logging.info('Starting to generate stub\'s')
+    bot: MainClient = await _setup()
+    logging.info('Starting to generate stub\'s')
 
-  root: Dict[str, Any] = {
-    'bot': {
-      '__name__': 'MainClient',
-      'register_configs': Callable[[str | List[str], Any | List[Any]], None],
-      'i18n': {
-        '__name__': 'i18n',
-        '__getitem__': Callable[['Context'], Dict[str, str]],
-        'default': str
-      },
-    },
-    'Module': {
-      '__name__': 'Module',
-      'install': Callable[[], None],
-      'setup': Callable[[], None],
-      'post_install': Callable[[], None]
-    }
-  }
+    root: Dict[str, Any] = {}
 
-  for mod in bot.config['modules']:
-    module: 'Module' = importlib.import_module(mod).Module(bot)
-    if hasattr(module, 'stub'):
-      logging.info(f'Generating stub for module `{mod}`')
-      module.stub(root)
+    for mod in bot.config['BaseModules']:
+        module: MetaModule = importlib.import_module(mod).Module(bot)
+        if hasattr(module, 'stub'):
+            logging.info('Generating stub for module `%s`', mod)
+            module.stub(root)
 
-  stubpy: str = importlib.import_module('stubgen').generate(root)
-  with open('stub.py', 'w') as st:
-    st.write(stubpy + '\n')
+    stubpy: str = importlib.import_module('stubgen').generate(root)
+    with open('stub.py', 'w', encoding='utf-8') as st:
+        st.write(stubpy + '\n')
 
-  logging.info('`stub.py` generated correctly')
+    logging.info('`stub.py` generated correctly')
 
 
 @click.group()
 def cli():
-  pass
+    pass
 
 
 @cli.command()
 def run():
-  asyncio.run(main(False, False))
+    asyncio.run(main(False, False))
 
 
 @cli.command()
 def setup():
-  asyncio.run(main(True, False))
+    asyncio.run(main(True, False))
 
 
 @cli.command()
 def test():
-  asyncio.run(main(False, True))
+    asyncio.run(main(False, True))
 
 
 @cli.command()
 def stub():
-  asyncio.run(generate_stub())
+    asyncio.run(generate_stub())
 
 
 if __name__ == '__main__':
-  uvloop.install()
-  cli()
+    uvloop.install()
+    cli()
