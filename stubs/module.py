@@ -3,6 +3,7 @@
 """
 
 from abc import ABCMeta, abstractmethod
+from typing import Any
 
 
 class MetaModule(metaclass=ABCMeta):
@@ -32,4 +33,11 @@ class MetaModule(metaclass=ABCMeta):
         Used for extra configuration needed
         after the installation process is completed
         (like, using another module)
+        """
+
+    @abstractmethod
+    def stub(self, root: dict[str, Any]) -> None:
+        """
+        Updates the new stub root with the
+        module info
         """

@@ -3,7 +3,7 @@
 """
 
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, Any
 import re
 
 from pyrogram.errors.exceptions.bad_request_400 import (
@@ -31,6 +31,7 @@ class Module(MetaModule):
     """
 
     i18n: MetaModule
+    ustorage: MetaModule
 
     def __init__(self, client: MetaClient):
         self.identifier = 'Goodies'
@@ -47,10 +48,24 @@ class Module(MetaModule):
 
     async def post_install(self) -> None:
         self.i18n = self.client.modules['I18n']
+        self.ustorage = self.client.modules['UStorage']
 
     def format_duration(
         self, time: int
     ) -> str:
+        """Gives format to a period of nth seconds
+
+        Parameters
+        ----------
+        time : int
+            The time to be formatted (time <= 24H, preferably)
+
+        Returns
+        -------
+        str
+            The requested time, formatted
+        """
+
         ans: str = ''
         if time >= 60*60:
             temp: int = int(time / (60 * 60))
@@ -137,7 +152,7 @@ class Module(MetaModule):
 
             if info['extractor'] != 'youtube':
                 url = info['webpage_url']
-                params: List[str] = url.rsplit('?', 1)[1].split('&')
+                params: list[str] = url.rsplit('?', 1)[1].split('&')
 
                 watchv: str = ''
                 for param in params:
@@ -167,7 +182,7 @@ class Module(MetaModule):
                 year = datetime.fromtimestamp(info['timestamp']).year
                 nurl = info['webpage_url']
 
-        return self.client.ustorage.SongData(
+        return self.ustorage.SongData(
             author=author,
             title=title,
             album=album,
@@ -192,7 +207,7 @@ class Module(MetaModule):
 
         await self.client.send_message(
             chat_id=rid,
-            text=self.client.i18n[context]['gd_report'].format(
+            text=self.i18n[context]['gd_report'].format(
                 method=method,
                 excname=type(exc).__name__,
                 excdata=str(exc),
@@ -206,3 +221,6 @@ class Module(MetaModule):
                 ctx_langcode=context.lang_code
             )
         )
+
+    def stub(self, root: dict[str, Any]) -> None:
+        pass

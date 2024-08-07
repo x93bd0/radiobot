@@ -25,6 +25,7 @@ class Module(MetaModule):
     goodies: MetaModule
     ustorage: MetaModule
 
+    player_status: object
     handlers: dict[str, MessageHandler]
 
 
@@ -44,47 +45,49 @@ class Module(MetaModule):
         self.goodies = self.client.modules['Goodies']
         self.ustorage = self.client.modules['UStorage']
 
+        self.player_status = self.player.player_status
+
         common = filters.group
         self.handlers = {
             'play': MessageHandler(
-                self.ustorage.Contextualize(
-                    self.ustorage.UseLock(self.play),
+                self.ustorage.c11e(
+                    self.ustorage.use_lock(self.play),
                     auto_update=False),
                 filters.command('play') & common
             ),
             'pause': MessageHandler(
-                self.ustorage.Contextualize(
-                    self.ustorage.UseLock(self.pause)),
+                self.ustorage.c11e(
+                    self.ustorage.use_lock(self.pause)),
                 filters.command('pause') & common
             ),
             'resume': MessageHandler(
-                self.ustorage.Contextualize(
-                    self.ustorage.UseLock(self.resume)),
+                self.ustorage.c11e(
+                    self.ustorage.use_lock(self.resume)),
                 filters.command('resume') & common
             ),
             'next': MessageHandler(
-                self.ustorage.Contextualize(
-                    self.ustorage.UseLock(self.next)),
+                self.ustorage.c11e(
+                    self.ustorage.use_lock(self.next)),
                 filters.command('next') & common
             ),
             'volume': MessageHandler(
-                self.ustorage.Contextualize(
-                    self.ustorage.UseLock(self.volume)),
+                self.ustorage.c11e(
+                    self.ustorage.use_lock(self.volume)),
                 filters.command('volume') & common
             ),
             'stop': MessageHandler(
-                self.ustorage.Contextualize(
-                    self.ustorage.UseLock(self.stop)),
+                self.ustorage.c11e(
+                    self.ustorage.use_lock(self.stop)),
                 filters.command('stop') & common
             ),
             'status': MessageHandler(
-                self.ustorage.Contextualize(
-                    self.ustorage.UseLock(self.status)),
+                self.ustorage.c11e(
+                    self.ustorage.use_lock(self.status)),
                 filters.command('status') & common
             ),
             'playlist': MessageHandler(
-                self.ustorage.Contextualize(
-                    self.ustorage.UseLock(self.playlist)),
+                self.ustorage.c11e(
+                    self.ustorage.use_lock(self.playlist)),
                 filters.command('playlist') & common
             )
         }
@@ -110,16 +113,53 @@ class Module(MetaModule):
                 context, self.i18n[context]['gpl_invalidurl'])
             return
 
+        await self.goodies.update_status(
+            context, self.i18n[context]['gpl_fetchingsd'])
+
         sdata: 'stub.SongData' = await self.goodies.song_from_url(url)
         sdata.url = url
 
-        if await self.player.play(context, sdata) == self.player.Status.OK:
-            await self.ustorage.ctx_upd(context)
-            await self.player.status(context)
+        status: object = self.player_status
+        async for upd in self.player.play(context, sdata):
+            match upd:
+                case status.ENQUEUED:
+                    await self.goodies.update_status(
+                        context, self.i18n[context]['pl_enqueued'].format(
+                            self.goodies.format_sd(
+                                context, sdata, key='gd_simpledata')))
 
-        else:
-            # TODO: Fail gracefully
-            pass
+                case status.GENERATING_CHAT_LINK:
+                    await self.goodies.update_status(
+                        context, self.i18n[context]['pl_glink'])
+
+                case status.JOINING:
+                    await self.goodies.update_status(
+                        context, self.i18n[context]['pl_joining'])
+
+                case status.OK:
+                    await self.ustorage.ctx_upd(context)
+                    await self.player.status(context)
+                    break
+
+                case status.CANT_GENERATE_LINK:
+                    await self.goodies.update_status(
+                        context, self.i18n[context]['pl_cglink'])
+                    break
+
+                case status.CANT_JOIN:
+                    await self.goodies.update_status(
+                        context, self.i18n[context]['pl_cjoin'])
+                    break
+
+                case status.NO_VOICE:
+                    await self.goodies.update_status(
+                        context, self.i18n[context]['pl_novoice'])
+                    break
+
+                case status.UNKNOWN_ERROR:
+                    await self.goodies.update_status(
+                        context, self.i18n[context]['pl_retry'])
+                    break
 
     async def pause(
         self, _, __, context: 'stub.Context'
@@ -264,3 +304,6 @@ class Module(MetaModule):
                 ])
             )
         )
+
+    def stub(self, root: dict[str, any]) -> None:
+        pass

@@ -1,4 +1,8 @@
-from typing import Tuple, Optional, List, Dict, Callable, Any
+"""
+    Playlist API for UStorage
+"""
+
+from typing import Tuple, Optional, Callable, Any
 from dataclasses import dataclass
 from asyncpg import Record
 
@@ -23,6 +27,17 @@ SongDataTuple = Tuple[str, str, str, str, int, str, int, str]
 
 
 class Module(MetaModule):
+    """
+    Playlist API Module
+    
+    Allows the managment of playlists in the bot.
+    Implements the SongData data structure, that
+    stores the common relevant data for any song
+    that is in the playlist.
+    Also, it uses a table named `PlStatus` for
+    storing the current playlist size and position.
+    """
+
     query_enqueue: str = \
         '''
             INSERT INTO Player.Playlist VALUES (
@@ -219,13 +234,13 @@ class Module(MetaModule):
         self, voice_id: int,
         limit: int = 10,
         offset: Optional[int] = None
-    ) -> List[SongData]:
+    ) -> list[SongData]:
         if offset is None:
             offset = await self.pl_position(voice_id)
 
-        playlist: List[SongData] = []
+        playlist: list[SongData] = []
         async with self.db.pool.acquire() as conn:
-            records: List[Record] = \
+            records: list[Record] = \
                 await conn.fetch(
                     self.query_fetch, voice_id, offset, limit)
 
@@ -261,7 +276,7 @@ class Module(MetaModule):
         return position
 
 
-    def stub(self, root: Dict[str, Any]) -> None:
+    def stub(self, root: dict[str, Any]) -> None:
         root['ustorage'].update({
             'SongData': {
                 '__name__': 'SongData',
@@ -279,7 +294,7 @@ class Module(MetaModule):
             'pl_enqueue': Callable[[int, 'SongData'], None],
             'pl_dequeue': Callable[[int], Optional[Tuple[int, 'SongData']]],
             'pl_clean': Callable[[int], None],
-            'pl_fetch': Callable[[int, int, Optional[int]], List['SongData']],
+            'pl_fetch': Callable[[int, int, Optional[int]], list['SongData']],
             'pl_position': Callable[[int], Optional[int]],
             'pl_size': Callable[[int], Optional[int]]
         })

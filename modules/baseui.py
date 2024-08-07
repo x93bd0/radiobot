@@ -2,6 +2,8 @@
     Base User Interface
 """
 
+from typing import Any
+
 from pyrogram.handlers import MessageHandler
 from pyrogram.types import Message
 from pyrogram import filters
@@ -38,11 +40,11 @@ class Module(MetaModule):
         common = filters.private
         self.handlers = {
             'start': MessageHandler(
-                self.ustorage.Contextualize(self.start),
+                self.ustorage.c11e(self.start),
                 common & filters.command('start')
             ),
             'help': MessageHandler(
-                self.ustorage.Contextualize(self.help),
+                self.ustorage.c11e(self.help),
                 common & filters.command('help')
             )
         }
@@ -57,10 +59,13 @@ class Module(MetaModule):
         context: 'stub.Context'
     ) -> None:
         await message.reply(self.i18n[context]['base_start'])
-    
+
     async def help(
         self, _,
         message: 'Message',
         context: 'stub.Context'
     ) -> None:
         await message.reply(self.i18n[context]['base_help'])
+
+    def stub(self, root: dict[str, Any]) -> None:
+        pass

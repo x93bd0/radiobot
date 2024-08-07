@@ -2,10 +2,11 @@
     Stub file
 """
 
-from .module import MetaModule
 from abc import ABCMeta, abstractmethod
 from typing import Any
-from pyrogram import Client
+
+from pyrogram.client import Client
+from .module import MetaModule
 
 
 class MainException(Exception):

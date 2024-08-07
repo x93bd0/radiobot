@@ -7,7 +7,7 @@
 		"pl_enqueued": "⏳ Audio enqueued\n{}",
 		"pl_joining": "Joining voice chat",
 		"pl_glink": "Generating join link",
-		"pl_cglink": "Can't generate join link\nℹ️ Check if the bot is admin, and haves the permission to generate them",
+		"pl_cglink": "Can't generate chat join link\nℹ️ Check if the bot is admin, and haves the permission to generate them",
 		"pl_joiningc": "Joining chat",
 		"pl_cjoin": "Player can't join chat\nℹ️ Check if the player is banned from the chat, if so, unban it",
 		"pl_splaying": "Starting the player",
@@ -38,6 +38,7 @@
 		"gpl_stopped": "Player left voice chat",
 		"gpl_playlist": "🎼 Playlist\n{}",
 		"gpl_placeholder": "{no}. {data}",
-		"gpl_nonext": "There isn't any remaining songs to play"
+		"gpl_nonext": "There isn't any remaining songs to play",
+        "gpl_fetchingsd": "Fetching track information"
 	}
 }

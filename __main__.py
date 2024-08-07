@@ -1,8 +1,9 @@
 """
     Main Bot Code
 """
+# TODO: Better Stub's
 
-from typing import Dict, Any, Optional, List, Callable
+from typing import Any, Optional
 import os.path
 import importlib
 import logging
@@ -17,7 +18,6 @@ from pyrogram.sync import idle
 from pytgcalls import PyTgCalls
 from dotenv import load_dotenv
 
-# For linting
 from stub import MetaClient, MetaModule, MainException
 
 
@@ -58,7 +58,7 @@ class MainAPI(PyTgCalls):
 
 async def _setup() -> MainClient:
     load_dotenv()
-    envars: Dict[str, str] = {}
+    envars: dict[str, str] = {}
     for var in ['CLIENT_NAME', 'TG_API_ID', 'TG_API_HASH']:
         if var not in os.environ:
             raise MainException(
@@ -71,7 +71,7 @@ async def _setup() -> MainClient:
     if os.getenv('DEBUG', ''):
         logging.basicConfig(level=logging.INFO)
 
-    config: Dict[str, Any] = {}
+    config: dict[str, Any] = {}
     if os.path.isfile('settings.json'):
         with open('settings.json', encoding='utf-8') as cfg:
             config.update(json.load(cfg))
@@ -96,7 +96,7 @@ async def _setup() -> MainClient:
 async def main(setup: bool, test: bool):
     bot: MainClient = await _setup()
 
-    modules: List[MetaModule] = []
+    modules: list[MetaModule] = []
     for mod in bot.config['BaseModules']:
         logging.info('Installing module `%s`', mod)
         module: MetaModule = importlib.import_module(mod).Module(bot)
@@ -140,7 +140,7 @@ async def generate_stub():
     bot: MainClient = await _setup()
     logging.info('Starting to generate stub\'s')
 
-    root: Dict[str, Any] = {}
+    root: dict[str, Any] = {}
 
     for mod in bot.config['BaseModules']:
         module: MetaModule = importlib.import_module(mod).Module(bot)

@@ -2,7 +2,9 @@
     Internacionalization (i18n)
 """
 
+from typing import Any
 import json
+
 from stub import MetaClient, MetaModule
 
 
@@ -56,3 +58,6 @@ class Module(MetaModule):
                 key.lang_code, self.strings[self.default])
 
         return self.strings[self.default]
+
+    def stub(self, root: dict[str, Any]) -> None:
+        pass

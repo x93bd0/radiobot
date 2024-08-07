@@ -1,10 +1,9 @@
-from typing import Optional, Tuple, Callable, Any, Dict
-from pyrogram.types import Message, CallbackQuery
+from typing import Optional, Callable, Any
 from dataclasses import dataclass
-from asyncpg import Record
-from pyrogram import Client
 
-# For linting
+from pyrogram.types import Message, CallbackQuery
+from pyrogram import Client
+from asyncpg import Record
 from stub import MetaClient, MetaModule
 
 
@@ -16,7 +15,7 @@ class Context:
     lang_code: str
     status_id: int
 
-ContextTuple = Tuple[int, bool, str, int]
+ContextTuple = tuple[int, bool, str, int]
 
 
 class Module(MetaModule):
@@ -81,7 +80,7 @@ class Module(MetaModule):
 
     async def install(self):
         self.db.Context = Context
-        self.db.Contextualize = self.Contextualize
+        self.db.c11e = self.c11e
 
         self.db.ctx_new = self.ctx_new
         self.db.ctx_upd = self.ctx_upd
@@ -124,13 +123,29 @@ class Module(MetaModule):
                 ''')
 
 
-    def Contextualize(self, method: Callable, auto_update: bool = True) -> Callable:
+    def c11e(self, method: Callable, auto_update: bool = True) -> Callable:
+        """Give context to a Telegram Handler Method
+
+        Parameters
+        ----------
+        method : callable[MetaClient], update[Update]
+            Method to `contextualize`
+        auto_update : bool
+            Auto update the context after a modification
+            is detected when the method execution ends. 
+
+        Returns
+        -------
+        callable
+            The new contextualized handler method
+        """
+
         async def middle(
             client: MetaClient, update: Message | CallbackQuery
         ) -> Any:
             if isinstance(update, Message):
                 chat_id: int = update.chat.id
-            
+
             else:
                 chat_id: int = update.message.chat.id
 
@@ -164,6 +179,7 @@ class Module(MetaModule):
                 await self.db.ctx_delete(context)
 
             return output
+
         return middle
 
     async def ctx_new(
@@ -204,7 +220,7 @@ class Module(MetaModule):
                 ctx.voice_id = voice_id
                 context = ctx
         return context
-                    
+
     async def ctx_get_by_logid(
         self, log_id: int
     ) -> Optional[Context]:
@@ -250,7 +266,7 @@ class Module(MetaModule):
                     self.query_delete, voice_id)
 
 
-    def stub(self, root: Dict[str, Any]) -> None:
+    def stub(self, root: dict[str, Any]) -> None:
         root['ustorage'].update({
             'Context': {
                 '__name__': 'Context',
@@ -261,7 +277,7 @@ class Module(MetaModule):
                 'status_id': int
             },
 
-            'Contextualize': Callable[
+            'c11e': Callable[
                 [Callable, bool],
                 Callable[[Client, Message | CallbackQuery], Any
             ]],

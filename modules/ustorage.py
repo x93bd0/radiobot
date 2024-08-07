@@ -1,4 +1,4 @@
-from typing import Optional, Any, Dict, List, Callable
+from typing import Optional, Any, Callable
 import importlib
 import logging
 import os
@@ -8,7 +8,7 @@ from stub import  MetaClient, MetaModule
 
 
 class Module(MetaModule):
-    modules: List[MetaModule]
+    modules: list[MetaModule]
 
     def __init__(self, client: MetaClient):
         self.identifier: str = 'UStorage'
@@ -56,7 +56,7 @@ class Module(MetaModule):
                 await mod.test()
 
 
-    def stub(self, root: Dict[str, Any]) -> None:
+    def stub(self, root: dict[str, Any]) -> None:
         root['ustorage'] = {
             '__name__': 'Storage',
             'pool': Optional[Pool]
@@ -68,7 +68,7 @@ class Module(MetaModule):
             'setup': Callable[[], None],
             'post_install': Callable[[], None],
             'test': Callable[[], None],
-            'stub': Callable[[Dict[str, Any]], None],
+            'stub': Callable[[dict[str, Any]], None],
             'path': str
         }
 

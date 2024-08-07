@@ -7,11 +7,11 @@ import traceback
 import enum
 
 from pyrogram.errors.exceptions.bad_request_400 import (
-    ChatAdminRequired,
     ChannelInvalid,
     InviteHashExpired,
 )
 
+from pyrogram.errors.exceptions.forbidden_403 import ChatAdminRequired
 from pyrogram.types import ChatInviteLink
 from pyrogram.client import Client
 
@@ -41,6 +41,9 @@ class PlayerStatus(enum.Enum):
     ENDED = 4
     UNKNOWN_ERROR = 5
     OK = 6
+    JOINING = 7
+    GENERATING_CHAT_LINK = 8
+    CANT_GENERATE_LINK = 9
 
 
 class Module(MetaModule):
@@ -73,24 +76,18 @@ class Module(MetaModule):
     async def play(
         self, context: 'stub.Context',
         data: 'stub.SongData'
-    ) -> PlayerStatus:
+    ) -> None:
         if context.voice_id in (await self.api.calls):
-            index: int = await self.ustorage.pl_enqueue(context.voice_id, data)
-            await self.goodies.update_status(
-                context, self.i18n[context]['pl_enqueued'].format(
-                    self.goodies.format_sd(context, data, key='gd_simpledata')))
-
-            return PlayerStatus.ENQUEUED
-
-        await self.goodies.update_status(
-            context, self.i18n[context]['pl_joining'])
+            await self.ustorage.pl_enqueue(
+                context.voice_id, data)
+            yield PlayerStatus.ENQUEUED
+            return
 
         try:
             await self.userbot.get_chat(context.voice_id)
 
         except ChannelInvalid:
-            await self.goodies.update_status(
-                context, self.i18n[context]['pl_glink'])
+            yield PlayerStatus.GENERATING_CHAT_LINK
 
             link: ChatInviteLink
             try:
@@ -99,23 +96,17 @@ class Module(MetaModule):
                     name=self.client.config['Player_InviteLink'])
 
             except ChatAdminRequired:
-                await self.goodies.update_status(
-                    context, self.i18n[context]['pl_cglink'])
-                return PlayerStatus.CANT_JOIN
-
-            await self.goodies.update_status(
-                context, self.i18n[context]['pl_joningc'])
+                yield PlayerStatus.CANT_GENERATE_LINK
+                return
 
             try:
                 await self.userbot.join_chat(link.invite_link)
 
             except InviteHashExpired:
-                await self.goodies.update_status(
-                    context, self.i18n[context]['pl_cjoin'])
-                return PlayerStatus.CANT_JOIN
+                yield PlayerStatus.CANT_JOIN
+                return
 
-        await self.goodies.update_status(
-            context, self.i18n[context]['pl_splaying'])
+        yield PlayerStatus.JOINING
 
         try:
             await self.api.play(context.voice_id, MediaStream(
@@ -124,9 +115,8 @@ class Module(MetaModule):
             ))
 
         except ChatAdminRequired:
-            await self.goodies.update_status(
-                context, self.i18n[context]['pl_novoice'])
-            return PlayerStatus.NO_VOICE
+            yield PlayerStatus.NO_VOICE
+            return
 
         except (
             NoAudioSourceFound, YtDlpError, ntgcalls.FFmpegError,
@@ -136,14 +126,14 @@ class Module(MetaModule):
                 context, e, traceback.format_exc(),
                 'player_play[play]')
 
-            await self.goodies.update_status(
-                context, self.i18n[context]['pl_retry'])
-            return PlayerStatus.UNKNOWN_ERROR
+            yield PlayerStatus.UNKNOWN_ERROR
+            return
 
         # Just 4 logging (& saving the first element of the playlist)
         await self.ustorage.pl_enqueue(context.voice_id, data)
         await self.ustorage.pl_dequeue(context.voice_id)
-        return PlayerStatus.OK
+
+        yield PlayerStatus.OK
 
     async def stop(
         self, context: 'stub.Context',
