@@ -53,7 +53,7 @@ class Module(MetaModule):
     def format_duration(
         self, time: int
     ) -> str:
-        """Gives format to a period of nth seconds
+        """Gives format to a period of `time` seconds
 
         Parameters
         ----------
