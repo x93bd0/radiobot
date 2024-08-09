@@ -2,9 +2,10 @@
     Player API
 """
 
-from typing import Optional, Tuple, List, Callable, Any
+from collections.abc import AsyncGenerator, Callable
+from typing import Optional, Any
+from enum import Enum, auto
 import traceback
-import enum
 
 from pyrogram.errors.exceptions.bad_request_400 import (
     ChannelInvalid,
@@ -34,16 +35,16 @@ import stub
 # TODO: Allow PlayerStatus to return "exceptions"
 
 
-class PlayerStatus(enum.Enum):
-    ENQUEUED = 1
-    CANT_JOIN = 2
-    NO_VOICE = 3
-    ENDED = 4
-    UNKNOWN_ERROR = 5
-    OK = 6
-    JOINING = 7
-    GENERATING_CHAT_LINK = 8
-    CANT_GENERATE_LINK = 9
+class PlayerStatus(Enum):
+    ENQUEUED = auto()
+    CANT_JOIN = auto()
+    NO_VOICE = auto()
+    ENDED = auto()
+    UNKNOWN_ERROR = auto()
+    OK = auto()
+    JOINING = auto()
+    GENERATING_CHAT_LINK = auto()
+    CANT_GENERATE_LINK = auto()
 
 
 class Module(MetaModule):
@@ -76,7 +77,7 @@ class Module(MetaModule):
     async def play(
         self, context: 'stub.Context',
         data: 'stub.SongData'
-    ) -> None:
+    ) -> AsyncGenerator[PlayerStatus, None]:
         if context.voice_id in (await self.api.calls):
             await self.ustorage.pl_enqueue(
                 context.voice_id, data)
@@ -160,7 +161,7 @@ class Module(MetaModule):
     async def next(
         self, context: 'stub.Context'
     ) -> PlayerStatus:
-        next_data: Optional[Tuple[int, 'stub.SongData']] = \
+        next_data: Optional[tuple[int, 'stub.SongData']] = \
             await self.ustorage.pl_dequeue(context.voice_id)
 
         if not next_data:
@@ -207,7 +208,7 @@ class Module(MetaModule):
 
         try:
             elapsed = await self.api.played_time(context.voice_id)
-            data: List['stub.SongData'] = await self.ustorage.pl_fetch(
+            data: list['stub.SongData'] = await self.ustorage.pl_fetch(
                 context.voice_id, limit=1,
                 offset=(await self.ustorage.pl_position(context.voice_id)) - 1)
 

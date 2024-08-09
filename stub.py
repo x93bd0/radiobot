@@ -1,1 +1,1 @@
-from stubs.client import MetaClient, MetaModule, MainException
+from stubs.client import MetaClient, MetaModule, MainException, SettingsCollision, InvalidSettings

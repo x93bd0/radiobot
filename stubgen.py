@@ -142,5 +142,5 @@ class StubGenerator:
 def generate(root: dict[str, Any]) -> str:
     stub: StubGenerator = StubGenerator()
     stub.generate_root(root)
-    return 'from stubs.client import MetaClient, MetaModule, MainException\n' + \
+    return 'from stubs.client import MetaClient, MetaModule, MainException, SettingsCollision, InvalidSettings\n' + \
         stub.to_code().replace('NoneType', 'None')

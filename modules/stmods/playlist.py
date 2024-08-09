@@ -2,8 +2,9 @@
     Playlist API for UStorage
 """
 
-from typing import Tuple, Optional, Callable, Any
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Optional, Any
 from asyncpg import Record
 
 # For linting
@@ -23,7 +24,7 @@ class SongData:
     duration: int
     url: str
 
-SongDataTuple = Tuple[str, str, str, str, int, str, int, str]
+SongDataTuple = tuple[str, str, str, str, int, str, int, str]
 
 
 class Module(MetaModule):
@@ -107,7 +108,7 @@ class Module(MetaModule):
 
 
     def __init__(self, client: MetaClient, db: MetaModule):
-        self.identifier: str = 'StMod.Playlist'
+        self.identifier: str = 'Playlist'
         self.client: MetaClient = client
         self.db: MetaModule = db
 
@@ -211,7 +212,7 @@ class Module(MetaModule):
 
     async def pl_dequeue(
         self, voice_id: int
-    ) -> Optional[Tuple[int, SongData]]:
+    ) -> Optional[tuple[int, SongData]]:
         data: Optional[SongData] = None
         index: int = 0
 
@@ -292,7 +293,7 @@ class Module(MetaModule):
 
             'pl_default_data': Callable[[], 'SongData'],
             'pl_enqueue': Callable[[int, 'SongData'], None],
-            'pl_dequeue': Callable[[int], Optional[Tuple[int, 'SongData']]],
+            'pl_dequeue': Callable[[int], Optional[tuple[int, 'SongData']]],
             'pl_clean': Callable[[int], None],
             'pl_fetch': Callable[[int, int, Optional[int]], list['SongData']],
             'pl_position': Callable[[int], Optional[int]],

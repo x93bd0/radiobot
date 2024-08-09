@@ -1,4 +1,5 @@
-from typing import Optional, Any, Callable
+from collections.abc import Callable
+from typing import Optional, Any
 import importlib
 import logging
 import os
@@ -8,7 +9,7 @@ from stub import  MetaClient, MetaModule
 
 
 class Module(MetaModule):
-    modules: list[MetaModule]
+    modules: dict[str, MetaModule]
 
     def __init__(self, client: MetaClient):
         self.identifier: str = 'UStorage'
@@ -28,33 +29,34 @@ class Module(MetaModule):
             database=os.getenv('PDB_NAME', 'radiobot')
         )
 
-        self.modules = []
+        self.modules = {}
         for mod in self.client.config['Ustorage_Modules']:
-            logging.info('Installing ustorage module `%s`', mod)
             module: MetaModule = importlib.import_module(mod).Module(
                 self.client, self)
 
+            identifier: str = self.identifier + '.' + module.identifier
+            logging.info('Installing `%s` module', identifier)
+
             module.path = mod
             await module.install()
-            self.modules.append(module)
+
+            self.modules[module.identifier] = module
 
     async def setup(self) -> None:
-        for mod in self.modules:
+        for mod in self.modules.values():
             if hasattr(mod, 'setup'):
-                logging.info('- Setting up ustorage[%s]', mod.path)
+                logging.info('- Setting up `ustorage[%s]`', mod.path)
                 await mod.setup()
 
     async def post_install(self) -> None:
-        for mod in self.modules:
+        for mod in self.modules.values():
             if hasattr(mod, 'post_install'):
                 await mod.post_install()
 
-    async def test(self) -> None:
-        for mod in self.modules:
-            if hasattr(mod, 'test'):
-                logging.info('- Testing ustorage[%s]', mod.path)
-                await mod.test()
-
+    async def test_helper(self, identifier: str) -> Optional[MetaModule]:
+        if identifier in self.modules:
+            logging.debug('Running test of `%s` module', identifier)
+            return self.modules[identifier]
 
     def stub(self, root: dict[str, Any]) -> None:
         root['ustorage'] = {

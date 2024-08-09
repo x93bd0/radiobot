@@ -1,7 +1,8 @@
-from typing import Optional, Callable, Any
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Optional, Any
 
-from pyrogram.types import Message, CallbackQuery
+from pyrogram.types import Message, CallbackQuery, Update
 from pyrogram import Client
 from asyncpg import Record
 from stub import MetaClient, MetaModule
@@ -9,6 +10,30 @@ from stub import MetaClient, MetaModule
 
 @dataclass
 class Context:
+    """Basic data structure that holds the context of any chat.
+
+    Notes
+    -----
+    This class should not be created manually, as there are methods
+    for doing so (see Module.ctx_new)
+
+    Attributes
+    ----------
+    voice_id
+        A Group/Channel ID for the player to do the main logic
+    log_id
+        A Group/Channel/User ID for the player to log current
+        status of the playing
+    logging
+        Enables/Disables the logging on the current session
+        making log_id directly dependant on this attribute
+    lang_code
+        The language to be used by the bot
+    status_id
+        The last update message ID, it may be used for not to
+        repeat many messages on the Chat
+    """
+
     voice_id: int
     log_id: int
     logging: bool
@@ -28,17 +53,17 @@ class Module(MetaModule):
     '''
 
     query_byvoice: str = '''
-        SELECT context FROM Telegram.Context
+        SELECT context::Telegram.ContextObj FROM Telegram.Context
         WHERE voice_id = $1
     '''
 
     query_bylogid: str = '''
-        SELECT voice_id, context FROM Telegram.Context
+        SELECT voice_id, context::Telegram.ContextObj FROM Telegram.Context
         WHERE (context).log_id = $1
     '''
 
     query_byaid: str = '''
-        SELECT voice_id, context FROM Telegram.Context
+        SELECT voice_id, context::Telegram.ContextObj FROM Telegram.Context
         WHERE (context).log_id = $1 OR voice_id = $1
         LIMIT 1
     '''
@@ -50,7 +75,7 @@ class Module(MetaModule):
 
 
     def __init__(self, client: MetaClient, db: MetaModule):
-        self.identifier: str = 'StMod.Context'
+        self.identifier: str = 'Context'
         self.client: MetaClient = client
         self.db: MetaModule = db
         self.context: Context = Context
@@ -90,6 +115,7 @@ class Module(MetaModule):
         self.db.ctx_get_by_logid = self.ctx_get_by_logid
         self.db.ctx_delete_by_voice = self.ctx_delete_by_voice
 
+
     async def post_install(self):
         self.i18n = self.client.modules['I18n']
 
@@ -123,20 +149,23 @@ class Module(MetaModule):
                 ''')
 
 
-    def c11e(self, method: Callable, auto_update: bool = True) -> Callable:
+    def c11e(
+        self, method: Callable[[MetaClient, Update], Any],
+        auto_update: bool = True
+    ) -> Callable:
         """Give context to a Telegram Handler Method
 
         Parameters
         ----------
-        method : callable[MetaClient], update[Update]
+        method
             Method to `contextualize`
-        auto_update : bool
+        auto_update
             Auto update the context after a modification
             is detected when the method execution ends. 
 
         Returns
         -------
-        callable
+        Callable
             The new contextualized handler method
         """
 
@@ -189,6 +218,28 @@ class Module(MetaModule):
         lang_code: Optional[str] = None,
         status_id: Optional[int] = None
     ) -> Context:
+        """Creates the context based on the required data
+
+        Parameters
+        ----------
+        voice_id
+            Channel/Group ID for the bot to play music on
+        logging
+            Availability of status messages on the chat
+        log_id
+            Channel/Group/User ID for the status messages
+        lang_code
+            User language code
+        status_id
+            The message to be updated to reflect the status
+            of the player
+
+        Returns
+        -------
+        Context
+            The new `Context` object
+        """
+
         return await self.ctx_upd(Context(
             voice_id=voice_id,
             log_id=log_id or 0,
@@ -201,6 +252,20 @@ class Module(MetaModule):
     async def ctx_upd(
         self, context: Context
     ) -> Context:
+        """Reflects a previously created context updates on the DB
+
+        Parameters
+        ----------
+        context
+            The `Context` object to update, with the
+            new information
+
+        Returns
+        -------
+        Context
+            The `Context` object
+        """
+
         async with self.db.pool.acquire() as conn:
             async with conn.transaction():
                 await conn.execute(self.query_new,
@@ -210,6 +275,19 @@ class Module(MetaModule):
     async def ctx_get_by_voice(
         self, voice_id: int
     ) -> Optional[Context]:
+        """Gets an old `Context` based on its voice_id
+
+        Parameters
+        ----------
+        voice_id
+            The `Context` object voice id to search
+        
+        Returns
+        -------
+        Context
+            The `Context` object, if it exists
+        """
+
         context: Optional[Context] = None
         async with self.db.pool.acquire() as conn:
             row: Optional[Record] = await conn.fetchrow(
@@ -224,6 +302,19 @@ class Module(MetaModule):
     async def ctx_get_by_logid(
         self, log_id: int
     ) -> Optional[Context]:
+        """Gets an old `Context` based on its log_id
+
+        Parameters
+        ----------
+        voice_id
+            The `Context` object log id to search
+        
+        Returns
+        -------
+        Context
+            The `Context` object, if it exists
+        """
+
         context: Optional[Context] = None
         async with self.db.pool.acquire() as conn:
             row: Optional[Record] = await conn.fetchrow(
@@ -238,6 +329,24 @@ class Module(MetaModule):
     async def ctx_get_by_aid(
         self, aid: int
     ) -> Optional[Context]:
+        """Gets an old `Context` based on its voice_id or log_id
+
+        Notes
+        -----
+        This method is unreliable, it may return a `Context` that
+        isn't the one that was being searched in the first place
+
+        Parameters
+        ----------
+        aid
+            The `Context` object voice/log id to search
+
+        Returns
+        -------
+        Context
+            The `Context` object, if it exists
+        """
+
         context: Optional[Context] = None
         async with self.db.pool.acquire() as conn:
             row: Optional[Record] = await conn.fetchrow(

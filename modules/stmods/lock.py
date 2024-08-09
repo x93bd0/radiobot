@@ -2,8 +2,9 @@
     Lock API for UStorage
 """
 
-from typing import Callable, Any, Optional
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any, Optional
 from datetime import datetime
 import traceback
 import asyncio
@@ -63,7 +64,7 @@ class Module(MetaModule):
 
 
     def __init__(self, client: MetaClient, db: MetaModule):
-        self.identifier = 'StMod.Lock'
+        self.identifier = 'Lock'
         self.client: MetaClient = client
         self.db: MetaModule = db
 
@@ -88,14 +89,17 @@ class Module(MetaModule):
                 ''')
 
     async def install(self) -> None:
-        self.db.lock_chat = self.lock_chat
+        self.db.acquire_lock = self.acquire_lock
         self.db.unlock_chat = self.unlock_chat
+        self.db.lock_chat = self.lock_chat
         self.db.lock_time = self.lock_time
         self.db.use_lock = self.use_lock
 
         self.client.register_configuration(self, {
             'LockSt_AutoUnlock': True,
-            'LockSt_Threeshold': 5
+            'LockSt_Threeshold': 240,
+            'LockSt_AcquireTries': 10,
+            'LockSt_AcquireSleep': 500
         })
 
     async def post_install(self) -> None:
@@ -127,21 +131,21 @@ class Module(MetaModule):
 
     async def lock_chat(
         self, context: 'stub.Context',
-        lock_level: int
+        lock_level: int = 1
     ) -> float:
         """Locks a chat
 
         Parameters
         ----------
-        context : StMod.Context
+        context
             The context of the chat
-        lock_level : int
+        lock_level
             Target lock level
 
         Returns
         -------
         float
-            the timestamp of the lock event (used as a lock_id)
+            The timestamp of the lock event (used as a lock_id)
         """
 
         key: datetime
@@ -150,6 +154,7 @@ class Module(MetaModule):
                 key = datetime.now()
                 await conn.execute(self.query_upd,
                     context.voice_id, ChatLock(lock_level, key))
+
         return key.timestamp()
 
     async def unlock_chat(
@@ -159,7 +164,7 @@ class Module(MetaModule):
 
         Parameters
         ----------
-        context : StMod.Context
+        context
             The context of the chat
         """
 
@@ -174,13 +179,14 @@ class Module(MetaModule):
 
         Parameters
         ----------
-        context : StMod.Context
+        context
             The context of the chat
 
         Returns
         -------
-        float
+        float | None
             the timestamp of the lock event (used as a lock_id)
+            (if it exist's)
         """
 
         ltime: Optional[float] = None
@@ -193,33 +199,62 @@ class Module(MetaModule):
                     ltime = record['data'].timestamp.timestamp()
         return ltime
 
+    async def acquire_lock(
+        self, context: 'stub.Context',
+        lock_level: int = 1
+    ) -> float:
+        sleep_time: float = self.client.config['LockSt_AcquireSleep'] / 1000
+        acquire_tries: int = self.client.config['LockSt_AcquireTries']
+        auto_unlock: bool = self.client.config['LockSt_AutoUnlock']
+        threeshold: int = self.client.config['LockSt_Threeshold']
+
+        times: int = 0
+        while times < acquire_tries:
+            if times > 0:
+                await asyncio.sleep(sleep_time)
+            times += 1
+
+            lockt: Optional[float] = await self.lock_time(context)
+            if lockt:
+                if not auto_unlock or (time.time() - lockt) <= threeshold:
+                    continue
+
+                await self.unlock_chat(context)
+
+            lock_id: float = await self.lock_chat(context, lock_level)
+            await asyncio.sleep(0.1)
+
+            if lock_id != await self.lock_time(context):
+                continue
+
+            return lock_id
+
+        # 'Brute force' the Lock Mechanism
+        # TODO: Test the case of 4 threads trying to acquire lock
+        #       at the same time
+
+        lock_id: float
+        while True:
+            lock_id = await self.lock_chat(context, lock_level)
+            await asyncio.sleep(0.1)
+            if lock_id == await self.lock_time(context):
+                break
+
+        return lock_id
+
+
     def use_lock(
         self, method: Callable,
         lock_level: int = 1
     ) -> Callable:
         async def new_method(*args, **kwargs) -> Any:
-            lockp: bool = True
-            if 'lockp' in kwargs:
-                lockp = kwargs.pop('lockp') is not False
+            use_lock: bool = True
+            if 'use_lock' in kwargs:
+                use_lock = kwargs.pop('use_lock') is not False
 
             context = args[2]
-            lck_when: Optional[float] = await self.lock_time(context)
-
-            if lck_when:
-                if self.client.config['LockSt_AutoUnlock']:
-                    if time.time() - lck_when <= \
-                            self.client.config['LockSt_Threeshold']:
-                        return
-                    await self.unlock_chat(context)
-
-                else:
-                    return
-
-            if lockp:
-                timestamp: int = await self.lock_chat(context, lock_level)
-                await asyncio.sleep(0.1)
-                if timestamp != await self.lock_time(context):
-                    return
+            if use_lock:
+                await self.acquire_lock(context, lock_level)
 
             data: Any = None
             try:
@@ -230,7 +265,7 @@ class Module(MetaModule):
                     context, e, traceback.format_exc(),
                     method.__name__)
 
-            if lockp:
+            if use_lock:
                 await self.unlock_chat(context)
             return data
         return new_method

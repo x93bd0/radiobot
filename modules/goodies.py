@@ -42,7 +42,7 @@ class Module(MetaModule):
 
     async def install(self) -> None:
         self.client.register_configuration(self, {
-            'Goodies_YTParseNamebot': True,
+            'Goodies_YTParseName': True,
             'Goodies_ReportErrorID': -1
         })
 
@@ -57,7 +57,7 @@ class Module(MetaModule):
 
         Parameters
         ----------
-        time : int
+        time
             The time to be formatted (time <= 24H, preferably)
 
         Returns

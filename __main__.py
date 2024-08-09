@@ -3,9 +3,11 @@
 """
 # TODO: Better Stub's
 
+from collections.abc import Callable
 from typing import Any, Optional
-import os.path
+import importlib.util
 import importlib
+import os.path
 import logging
 import asyncio
 import json
@@ -18,42 +20,50 @@ from pyrogram.sync import idle
 from pytgcalls import PyTgCalls
 from dotenv import load_dotenv
 
-from stub import MetaClient, MetaModule, MainException
+from stub import (
+    MetaClient, MetaModule, MainException,
+    SettingsCollision, InvalidSettings
+)
 
 
 class MainClient(MetaClient):
+    userbot: Client
+    api: PyTgCalls
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.modules: dict[str, MetaModule] = {}
         self.config: dict[str, Any] = {}
         self.defby: dict[str, MetaModule] = {}
 
-        self.userbot: Optional[Client] = None
-        self.api: Optional[PyTgCalls] = None
+    def require_configuration(
+        self, module: MetaModule | MetaClient,
+        config: str
+    ) -> None:
+        if config not in self.config:
+            raise InvalidSettings(
+                f'Settings key `{config}` is not defined ' +
+                f'(and it\'s required by {module.identifier})')
 
     def register_configuration(
-        self, module: MetaModule,
+        self, module: MetaModule | MetaClient,
         config: dict[str, dict[str, str]],
-        check_collisions: bool = False
+        check_collisions: bool = True
     ) -> None:
         for k, v in config.items():
             if k not in self.config:
                 self.config[k] = v
-                self.defby[k] = module.identifier
+                self.defby[k] = module
 
             elif check_collisions:
                 if k in self.defby:
-                    raise MainException(
+                    raise SettingsCollision(
                         f'Configuration `{k}` is already used by module ' +
                         f'`{self.defby[k].identifier}`' +
-                        f'(requested by `{module.identifier}`)'
+                        f'(requested by module `{module.identifier}`)'
                     )
 
-
-class MainAPI(PyTgCalls):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.mainbot: Optional[MainClient] = None
+                self.defby[k] = module
 
 
 async def _setup() -> MainClient:
@@ -69,7 +79,7 @@ async def _setup() -> MainClient:
         envars[var] = os.environ[var]
 
     if os.getenv('DEBUG', ''):
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(level=logging.DEBUG)
 
     config: dict[str, Any] = {}
     if os.path.isfile('settings.json'):
@@ -86,57 +96,160 @@ async def _setup() -> MainClient:
         api_hash=envars['TG_API_HASH'],
         name=envars['CLIENT_NAME'] + '_userbot')
 
-    bot.api = MainAPI(bot.userbot)
+    bot.api = PyTgCalls(bot.userbot)
     bot.api.mainbot = bot
+
     bot.config.update(config)
+    bot.require_configuration(bot, 'BaseModules')
+
+    for mod in bot.config['BaseModules']:
+        module: MetaModule = importlib \
+            .import_module(mod) \
+            .Module(bot)
+
+        if module.identifier in bot.modules:
+            raise MainException(
+                f'Module `{module.identifier}` has two options ' +
+                f'({type(bot.modules[module.identifier]).__module__}' +
+                f' and {mod})'
+            )
+
+        bot.modules[module.identifier] = module
 
     return bot
 
 
-async def main(setup: bool, test: bool):
+
+@click.group()
+def cli():
+    pass
+
+
+async def async_run(
+    setup_mode: bool = False
+) -> None:
     bot: MainClient = await _setup()
 
-    modules: list[MetaModule] = []
-    for mod in bot.config['BaseModules']:
-        logging.info('Installing module `%s`', mod)
-        module: MetaModule = importlib.import_module(mod).Module(bot)
-        module.path = mod
-        await module.install()
-        modules.append(module)
-
-        bot.modules[module.identifier] = module
-
-    if setup:
-        for mod in modules:
-            if hasattr(mod, 'setup'):
-                logging.info('Setting up `%s`', mod.path)
-                await mod.setup()
-
-        logging.info('Setup sequence ended! Quitting...')
+    for v in bot.modules.values():
+        logging.debug(
+            'Installing `%s` module', v.identifier)
+        await v.install()
+    logging.info('Installed modules!')
+    
+    if setup_mode:
+        for v in bot.modules.values():
+            logging.debug('Setting up `%s` module', v.identifier)
+            await v.setup()
+        logging.info('Setted up all modules!')
         return
 
-    for mod in modules:
-        if hasattr(mod, 'post_install'):
-            await mod.post_install()
+    for v in bot.modules.values():
+        logging.debug(
+            'Running post-install of module `%s`', v.identifier)
+        await v.post_install()
+    logging.info('Ran `post-install` method of every module')
 
-    if test:
-        for mod in modules:
-            if hasattr(mod, 'test'):
-                logging.info('Testing `%s`', mod.path)
-                await mod.test()
-
-        logging.info('Test sequence ended! Quitting...')
-        return
-
-    logging.info('Starting bot...')
+    logging.info('Starting bot')
     await bot.start()
-    logging.info('Starting userbot api...')
+
+    logging.info('Starting userbot')
     await bot.api.start()
-    logging.info('Idling...')
+
+    logging.info('Idling')
     await idle()
 
+@cli.command()
+@click.option(
+    '--setup', '-s', 'setup_mode',
+    is_flag=True)
+def run(setup_mode: bool):
+    asyncio.run(async_run(setup_mode))
 
-async def generate_stub():
+
+async def async_test() -> None:
+    bot: MainClient = await _setup()
+    bot.require_configuration(bot, 'tests')
+
+    for v in bot.modules.values():
+        logging.debug('Installing `%s` module', v.identifier)
+        await v.install()
+
+    tests: dict[str, dict[str, list[Callable]]] = {}
+    for k in bot.modules.keys():
+        tests[k] = {}
+
+    for testmod in bot.config['tests']:
+        spec: Any = importlib.util.spec_from_file_location(
+            os.path.normpath(testmod).replace('/', '.'),
+            testmod)
+
+        mod: Any = spec.loader.load_module()
+        tmod: str = mod.test_module
+
+        if tmod not in tests:
+            continue
+
+        steps: dict[str, Callable] = mod.steps
+        for step, cbl in steps.items():
+            if step not in tests[tmod]:
+                tests[tmod][step] = [cbl]
+
+            else:
+                tests[tmod][step].append(cbl)
+
+    for mod, tdata in tests.items():
+        if 'install' in tdata:
+            module: MetaModule = bot.modules[mod]
+            identifier: str = module.identifier
+
+            logging.info('Running test_install of `%s` module (0/%d)',
+                identifier, len(tdata['install']))
+
+            no: int = 1
+            for cbl in tdata['install']:
+                resp: Optional[Exception] = await cbl(module)
+
+                if resp:
+                    logging.debug('Raising exception from test_install of `%s`',
+                        identifier)
+                    raise resp
+
+                logging.info('Running test_install of `%s` module (%d/%d)',
+                    identifier, no, len(tdata['install']))
+                no += 1
+
+    for v in bot.modules.values():
+        logging.debug('Running post-install of `%s` module', v.identifier)
+        await v.post_install()
+
+    for mod, tdata in tests.items():
+        if 'post_install' in tdata:
+            module: MetaModule = bot.modules[mod]
+            identifier: str = module.identifier
+
+            logging.info('Running test_post_install of `%s` module (0/%d)',
+                identifier, len(tdata['post_install']))
+
+            no: int = 1
+            for cbl in tdata['post_install']:
+                resp: Optional[Exception] = await cbl(module)
+
+                if resp:
+                    logging.debug('Raising exception from test_post_install of `%s`',
+                        identifier)
+                    raise resp
+
+                logging.info('Running test_post_install of `%s` module (%d/%d)',
+                    identifier, no, len(tdata['post_install']))
+                no += 1
+                await cbl(bot.modules[mod])
+
+@cli.command()
+def test() -> None:
+    asyncio.run(async_test())
+
+
+async def async_stub():
     bot: MainClient = await _setup()
     logging.info('Starting to generate stub\'s')
 
@@ -154,30 +267,9 @@ async def generate_stub():
 
     logging.info('`stub.py` generated correctly')
 
-
-@click.group()
-def cli():
-    pass
-
-
-@cli.command()
-def run():
-    asyncio.run(main(False, False))
-
-
-@cli.command()
-def setup():
-    asyncio.run(main(True, False))
-
-
-@cli.command()
-def test():
-    asyncio.run(main(False, True))
-
-
 @cli.command()
 def stub():
-    asyncio.run(generate_stub())
+    asyncio.run(async_stub())
 
 
 if __name__ == '__main__':

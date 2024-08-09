@@ -3,10 +3,16 @@
 """
 
 from typing import Optional
+import traceback
+
 from pytgcalls.exceptions import NotInCallError, NoActiveGroupCall
+from pytgcalls.pytgcalls import PyTgCalls
+from pytgcalls.types import Update
+import pytgcalls.filters
+
 from pyrogram.handlers.message_handler import MessageHandler
 from pyrogram.types import Message
-from pyrogram import filters
+import pyrogram.filters
 import validators
 
 from stub import MetaClient, MetaModule
@@ -25,7 +31,7 @@ class Module(MetaModule):
     goodies: MetaModule
     ustorage: MetaModule
 
-    player_status: object
+    player_status: 'stub.PlayerStatus'
     handlers: dict[str, MessageHandler]
 
 
@@ -47,54 +53,58 @@ class Module(MetaModule):
 
         self.player_status = self.player.player_status
 
-        common = filters.group
+        common = pyrogram.filters.group
         self.handlers = {
             'play': MessageHandler(
                 self.ustorage.c11e(
                     self.ustorage.use_lock(self.play),
                     auto_update=False),
-                filters.command('play') & common
+                pyrogram.filters.command('play') & common
             ),
             'pause': MessageHandler(
                 self.ustorage.c11e(
                     self.ustorage.use_lock(self.pause)),
-                filters.command('pause') & common
+                pyrogram.filters.command('pause') & common
             ),
             'resume': MessageHandler(
                 self.ustorage.c11e(
                     self.ustorage.use_lock(self.resume)),
-                filters.command('resume') & common
+                pyrogram.filters.command('resume') & common
             ),
             'next': MessageHandler(
                 self.ustorage.c11e(
                     self.ustorage.use_lock(self.next)),
-                filters.command('next') & common
+                pyrogram.filters.command('next') & common
             ),
             'volume': MessageHandler(
                 self.ustorage.c11e(
                     self.ustorage.use_lock(self.volume)),
-                filters.command('volume') & common
+                pyrogram.filters.command('volume') & common
             ),
             'stop': MessageHandler(
                 self.ustorage.c11e(
                     self.ustorage.use_lock(self.stop)),
-                filters.command('stop') & common
+                pyrogram.filters.command('stop') & common
             ),
             'status': MessageHandler(
                 self.ustorage.c11e(
                     self.ustorage.use_lock(self.status)),
-                filters.command('status') & common
+                pyrogram.filters.command('status') & common
             ),
             'playlist': MessageHandler(
                 self.ustorage.c11e(
                     self.ustorage.use_lock(self.playlist)),
-                filters.command('playlist') & common
+                pyrogram.filters.command('playlist') & common
             )
         }
 
         for h in self.handlers.values():
             self.client.add_handler(h)
 
+        self.client.api.add_handler(
+            self.api_next,
+            pytgcalls.filters.stream_end
+        )
 
     async def play(
         self, _, message: Message, context: 'stub.Context'
@@ -119,7 +129,7 @@ class Module(MetaModule):
         sdata: 'stub.SongData' = await self.goodies.song_from_url(url)
         sdata.url = url
 
-        status: object = self.player_status
+        status: 'stub.PlayerStatus' = self.player_status
         async for upd in self.player.play(context, sdata):
             match upd:
                 case status.ENQUEUED:
@@ -234,7 +244,7 @@ class Module(MetaModule):
                 context, self.bot.i18n[context]['gpl_volupd'].format(ctx))
 
         except ValueError:
-            await self.goodies.supdate_status(
+            await self.goodies.update_status(
                 context, self.i18n[context]['gpl_volvale'])
             return
 
@@ -304,6 +314,31 @@ class Module(MetaModule):
                 ])
             )
         )
+    
+    # TODO: Isolate on its own module
+    async def api_next(
+        self, _: PyTgCalls, update: Update
+    ) -> None:
+        context: 'stub.Context' = await self.ustorage \
+            .ctx_get_by_voice(update.chat_id)
+        await self.ustorage.acquire_lock(context)
+
+        if not context:
+            try:
+                await self.player.api.leave_chat(update.chat_id)
+            except (NotInCallError, NoActiveGroupCall):
+                pass
+        else:
+            try:
+                await self.player.next(context)
+                await self.player.status(context)
+            except Exception as e:
+                await self.goodies.report_error(
+                    context, e, traceback.format_exc(),
+                    '[unexpected exception, player.next/player.status]')
+
+        await self.ustorage.unlock_chat(context)
+
 
     def stub(self, root: dict[str, any]) -> None:
         pass

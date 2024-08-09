@@ -15,5 +15,9 @@
 		"modules.stmods.playlist",
 		"modules.stmods.context",
 		"modules.stmods.lock"
-	]
+	],
+
+    "tests": [
+        "./tests/test_stmods_context.py"
+    ]
 }
