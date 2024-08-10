@@ -3,8 +3,9 @@
 """
 
 from typing import Optional, Coroutine, Any
-from random import randint
+from random import randint, choice
 import logging
+import asyncio
 import time
 
 from stub import MetaModule
@@ -17,39 +18,47 @@ async def time_coroutine(coroutine: Coroutine) -> tuple[float, Any]:
     return (time.time() - st, resp)
 
 
-async def test_setup(self: MetaModule) -> Optional[Exception]:
-    """
-    Called after setup
+async def routine(
+    self: MetaModule,
+    iterations: int,
+    voice_id: int,
+    log_id: int
+) -> float:
+    start: float = time.time()
+    ctx: dict[str, Any] = {
+        'voice_id': voice_id,
+        'log_id': log_id,
+        'logging': bool(randint(0, 1)),
+        'lang_code': choice(['en', 'es', 'ch', 'gh']),
+        'status_id': randint(0, 2 << 32)
+    }
 
-    Arguments
-    ---------
-    self
-        The module to be tested
+    context: 'stub.Context' = await self.ctx_new(**ctx)
+    assert context.voice_id == ctx['voice_id']
+    assert context.log_id == ctx['log_id']
+    assert context.logging == ctx['logging']
+    assert context.lang_code == ctx['lang_code']
+    assert context.status_id == ctx['status_id']
+
+    for _ in range(0, iterations):
+        context.lang_code = choice(['en', 'es', 'ch', 'gh'])
+        context.status_id = randint(0, 2 << 32)
+        context.logging = bool(randint(0, 1))
+
+        for k in ctx.keys():
+            ctx[k] = getattr(context, k)
+
+        context = await self.ctx_upd(context)
+        assert context.voice_id == ctx['voice_id']
+        assert context.log_id == ctx['log_id']
+        assert context.logging == ctx['logging']
+        assert context.lang_code == ctx['lang_code']
+        assert context.status_id == ctx['status_id']
     
-    Returns
-    -------
-    Exception, optional
-        None if everything went well, in the other case
-        it must return an exception
-    """
+    await self.ctx_delete(context)
+    # TODO: Assert
+    return time.time() - start
 
-
-
-async def test_install(self: MetaModule) -> Optional[Exception]:
-    """
-    Called after install
-
-    Arguments
-    ---------
-    self
-        The module to be tested
-    
-    Returns
-    -------
-    Exception, optional
-        None if everything went well, in the other case
-        it must return an exception
-    """
 
 async def test_post_install(self: MetaModule) -> Optional[Exception]:
     """
@@ -162,10 +171,39 @@ async def test_post_install(self: MetaModule) -> Optional[Exception]:
         logging.debug(
             'Results `%s`: %fms', k, (v / size) * 1000)
 
+    tasks: int = 8
+    runtime: float = 1
+    separation: int = randint(1, 2 << 32)
+    iterations: int = int(runtime / (
+        (results['ctx_upd'] / size)
+    ))
+
+    logging.info(
+        'Performing concurrency test for `%lf seconds`, '
+        'with `%d tasks` and `%d iterations` (different ids)',
+        runtime, tasks, iterations)
+
+    futures: list[asyncio.Task] = []
+    for x in range(0, tasks):
+        futures.append(asyncio.create_task(routine(
+            mod, iterations,
+            (x + 1) * separation,
+            (separation * (1 + tasks)) * (x + 1)
+        )))
+
+    await asyncio.sleep(runtime)
+
+    elapsed: float = 0
+    for fut in futures:
+        elapsed += await fut
+    elapsed /= tasks
+
+    logging.info(
+        'Concurrency test ran in `%lf seconds` correctly! '
+        '(accuracy: %lf%%)', elapsed, runtime / elapsed * 100)
+
 
 test_module: str = 'UStorage'
 steps: dict[str, Optional[callable]] = {
-    'setup': test_setup,
-    'install': test_install,
     'post_install': test_post_install
 }

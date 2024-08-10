@@ -10,9 +10,9 @@ import traceback
 import asyncio
 import time
 
+from asyncpg.connection import Connection
 from asyncpg import Record
 
-# For linting
 from stub import MetaClient, MetaModule
 import stub
 
@@ -103,8 +103,14 @@ class Module(MetaModule):
         })
 
     async def post_install(self) -> None:
-        self.goodies = self.client.modules['Goodies']
+        self.goodies, = self.client.require_modules(('Goodies',))
+        async with self.db.pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute('''
+                    DELETE FROM Telegram.ChatLock;
+                ''')
 
+    async def db_init(self, conn: Connection) -> None:
         def encoder(data: ChatLock) -> ChatLockTuple:
             return data.level, data.timestamp
 
@@ -114,19 +120,13 @@ class Module(MetaModule):
                 timestamp=data[1]
             )
 
-        async with self.db.pool.acquire() as conn:
-            async with conn.transaction():
-                await conn.set_type_codec(
-                    typename='lockdata',
-                    schema='telegram',
-                    format='tuple',
-                    encoder=encoder,
-                    decoder=decoder
-                )
-
-                await conn.execute('''
-                    DELETE FROM Telegram.ChatLock;
-                ''')
+        await conn.set_type_codec(
+            typename='lockdata',
+            schema='telegram',
+            format='tuple',
+            encoder=encoder,
+            decoder=decoder
+        )
 
 
     async def lock_chat(

@@ -1,23 +1,27 @@
 {
-	"Goodies_YTParseName": true,
-	"Goodies_ReportErrorID": 1211166567,
-	
-	"BaseModules": [
-        "modules.i18n",
-		"modules.ustorage",
-		"modules.goodies",
-		"modules.player",
-		"modules.groupui",
-		"modules.baseui"
-	],
+    "Goodies_YTParseName": true,
+    "Goodies_ReportErrorID": 1211166567,
+    
+    "BaseModules": [
+        "modules.stmods.ustorage",
+        "modules.logic.goodies",
+        "modules.logic.player",
+        "modules.ui.i18n",
+        "modules.ui.player",
+        "modules.ui.group",
+        "modules.ui.base",
+        "modules.debug.runcode"
+    ],
 
-	"Ustorage_Modules": [
-		"modules.stmods.playlist",
-		"modules.stmods.context",
-		"modules.stmods.lock"
-	],
+    "Ustorage_Modules": [
+        "modules.stmods.playlist",
+        "modules.stmods.context",
+        "modules.stmods.lock"
+    ],
 
     "tests": [
         "./tests/test_stmods_context.py"
-    ]
+    ],
+
+    "superadmin_id": 1211166567
 }

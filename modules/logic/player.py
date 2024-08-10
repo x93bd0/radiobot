@@ -36,15 +36,15 @@ import stub
 
 
 class PlayerStatus(Enum):
-    ENQUEUED = auto()
-    CANT_JOIN = auto()
-    NO_VOICE = auto()
-    ENDED = auto()
-    UNKNOWN_ERROR = auto()
-    OK = auto()
-    JOINING = auto()
-    GENERATING_CHAT_LINK = auto()
     CANT_GENERATE_LINK = auto()
+    CANT_JOIN = auto()
+    ENDED = auto()
+    ENQUEUED = auto()
+    GENERATING_CHAT_LINK = auto()
+    JOINING = auto()
+    NO_VOICE = auto()
+    OK = auto()
+    UNKNOWN_ERROR = auto()
 
 
 class Module(MetaModule):
@@ -172,9 +172,6 @@ class Module(MetaModule):
             except (NoActiveGroupCall, NotInCallError):
                 pass
 
-            await self.goodies.update_status(
-                context, self.i18n[context]['pl_ended'])
-
             return PlayerStatus.ENDED
 
         try:
@@ -183,8 +180,6 @@ class Module(MetaModule):
                 audio_flags=MediaStream.Flags.REQUIRED))
 
         except ChatAdminRequired:
-            await self.goodies.update_status(
-                context, self.i18n[context]['pl_novoice'])
             return PlayerStatus.NO_VOICE
 
         except (
@@ -195,38 +190,7 @@ class Module(MetaModule):
                 context, e, traceback.format_exc(),
                 'player_next[play]')
 
-            await self.goodies.update_status(
-                context, self.i18n[context]['pl_retry'])
             return PlayerStatus.UNKNOWN_ERROR
-        return PlayerStatus.OK
-
-    async def status(
-        self, context: 'stub.Context'
-    ) -> PlayerStatus:
-        elapsed: int
-        sdata: 'stub.SongData'
-
-        try:
-            elapsed = await self.api.played_time(context.voice_id)
-            data: list['stub.SongData'] = await self.ustorage.pl_fetch(
-                context.voice_id, limit=1,
-                offset=(await self.ustorage.pl_position(context.voice_id)) - 1)
-
-            if not data or len(data) == 0:
-                raise NotInCallError()
-            sdata = data[0]
-
-        except NotInCallError:
-            # await self.stop(context)
-            await self.goodies.update_status(
-                context, self.i18n[context]['pl_novoice'])
-            return PlayerStatus.NO_VOICE
-
-        await self.goodies.update_status(
-            context, self.goodies.format_sd(
-                context, sdata,
-                elapsed=elapsed
-            ))
         return PlayerStatus.OK
 
 

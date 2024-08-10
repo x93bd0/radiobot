@@ -36,6 +36,7 @@ class MetaClient(Client, metaclass=ABCMeta):
     """
 
     identifier: str = 'MainClient'
+    debug: bool = False
 
     modules: dict[str, MetaModule]
     defby: dict[str, MetaModule]
@@ -89,4 +90,27 @@ class MetaClient(Client, metaclass=ABCMeta):
         SettingsCollision
             Raised if `check_collisions` is set to true, and
             there is any collision between module configurations
+        """
+
+    @abstractmethod
+    def require_modules(
+        self, modules: tuple[str]
+    ) -> tuple[MetaModule]:
+        """Obtains modules from the MainBot.
+
+        Parameters
+        ----------
+        modules
+            The modules to load (each one identifier)
+        
+        Returns
+        -------
+        tuple
+            The requested modules
+        
+        Raises
+        ------
+        MainException
+            Raised if any of the requested modules isn't installed
+            on the MainBot
         """

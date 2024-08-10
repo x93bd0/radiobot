@@ -5,9 +5,10 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Optional, Any
+
+from asyncpg.connection import Connection
 from asyncpg import Record
 
-# For linting
 from stub import MetaClient, MetaModule
 
 
@@ -88,11 +89,16 @@ class Module(MetaModule):
             LIMIT $3;
         '''
 
-    query_clean: str = \
+    query_clean: list[str] = [
         '''
             DELETE FROM Player.Playlist
             WHERE voice_id = $1;
+        ''',
         '''
+            DELETE FROM Player.PlStatus
+            WHERE voice_id = $1;
+        '''
+    ]
 
     query_size: str = \
         '''
@@ -167,6 +173,14 @@ class Module(MetaModule):
         self.db.pl_size = self.pl_size
 
     async def post_install(self) -> None:
+        async with self.db.pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute('''
+                    DELETE FROM Player.Playlist;
+                    DELETE FROM Player.PlStatus;
+                ''')
+
+    async def db_init(self, conn: Connection) -> None:
         def encoder(data: SongData) -> SongDataTuple:
             return (
                 data.author, data.title, data.album,
@@ -177,20 +191,13 @@ class Module(MetaModule):
         def decoder(data: SongDataTuple) -> SongData:
             return SongData(*data)
 
-        async with self.db.pool.acquire() as conn:
-            async with conn.transaction():
-                await conn.set_type_codec(
-                    typename='songdata',
-                    schema='player',
-                    format='tuple',
-                    encoder=encoder,
-                    decoder=decoder
-                )
-
-                await conn.execute('''
-                    DELETE FROM Player.Playlist;
-                    DELETE FROM Player.PlStatus;
-                ''')
+        await conn.set_type_codec(
+            typename='songdata',
+            schema='player',
+            format='tuple',
+            encoder=encoder,
+            decoder=decoder
+        )
 
 
     async def pl_enqueue(
@@ -254,7 +261,8 @@ class Module(MetaModule):
     ) -> None:
         async with self.db.pool.acquire() as conn:
             async with conn.transaction():
-                await conn.execute(self.query_clean, voice_id)
+                for stmt in self.query_clean:
+                    await conn.execute(stmt, voice_id)
 
     async def pl_size(
         self, voice_id: int

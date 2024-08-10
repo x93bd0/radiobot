@@ -39,6 +39,16 @@
 		"gpl_playlist": "🎼 Playlist\n{}",
 		"gpl_placeholder": "{no}. {data}",
 		"gpl_nonext": "There isn't any remaining songs to play",
-        "gpl_fetchingsd": "Fetching track information"
+        "gpl_fetchingsd": "Fetching track information",
+        "gpl_ended": "Stream ended",
+
+        "cpl_updated": "Status message updated!",
+        "cpl_unknownerror": "Something bad happened...",
+        "cpl_paused": "Stream paused!",
+        "cpl_resumed": "Stream resumed!",
+        "cpl_ended": "Stream stopped!",
+
+        "rc_exc": "» **Exception raised!**\n```python\n{}```",
+        "rc_res": "» **Code ran successfully**\n» Result:\n<code lang='python'>{}</code>\n» Stdout Buffer:\n<code lang='python'>{}</code>"
 	}
 }

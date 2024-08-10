@@ -36,6 +36,7 @@ class Module(MetaModule):
     def __init__(self, client: MetaClient):
         self.identifier = 'Goodies'
         self.client: MetaClient = client
+        self.cbkid: int = 0
 
     async def setup(self) -> None:
         pass
@@ -74,6 +75,10 @@ class Module(MetaModule):
 
         return ans + f'{int(time / 60):0>2}:{time % 60:0>2}'
 
+    def get_callback_prefix(self) -> str:
+        self.cbkid += 1
+        return str(self.cbkid - 1) + ' '
+
     def format_sd(
         self, context: 'stub.Context',
         data: 'stub.SongData',
@@ -104,7 +109,7 @@ class Module(MetaModule):
 
     async def update_status(
         self, context: 'stub.Context', text: str,
-        title: Optional[str] = None
+        title: Optional[str] = None, **kwargs
     ) -> Optional[Message]:
         # TODO: Format correctly & check for id separation
         msgtext: str = self.i18n[context]['gd_container'].format(
@@ -119,13 +124,13 @@ class Module(MetaModule):
                 out = await self.client.edit_message_text(
                     chat_id=context.log_id,
                     message_id=context.status_id,
-                    text=msgtext
+                    text=msgtext, **kwargs
                 )
 
             except MessageIdInvalid:
                 out = await self.client.send_message(
                     chat_id=context.log_id,
-                    text=msgtext
+                    text=msgtext, **kwargs
                 )
 
                 context.status_id = out.id

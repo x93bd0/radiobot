@@ -29,6 +29,7 @@ class Module(MetaModule):
     i18n: MetaModule
     player: MetaModule
     goodies: MetaModule
+    playerui: MetaModule
     ustorage: MetaModule
 
     player_status: 'stub.PlayerStatus'
@@ -46,11 +47,9 @@ class Module(MetaModule):
         pass
 
     async def post_install(self):
-        self.i18n = self.client.modules['I18n']
-        self.player = self.client.modules['Player']
-        self.goodies = self.client.modules['Goodies']
-        self.ustorage = self.client.modules['UStorage']
-
+        self.i18n, self.player, self.goodies, self.playerui, self.ustorage = \
+            self.client.require_modules((
+                'I18n', 'Player', 'Goodies', 'PlayerUI', 'UStorage'))
         self.player_status = self.player.player_status
 
         common = pyrogram.filters.group
@@ -148,7 +147,7 @@ class Module(MetaModule):
 
                 case status.OK:
                     await self.ustorage.ctx_upd(context)
-                    await self.player.status(context)
+                    await self.playerui.player_init(context)
                     break
 
                 case status.CANT_GENERATE_LINK:
@@ -280,7 +279,7 @@ class Module(MetaModule):
                 context, self.i18n[context]['pl_novoice'])
             return False
 
-        await self.player.status(context)
+        await self.client.modules['PlayerUI'].player_init(context)
 
     async def playlist(
         self, _, __, context: 'stub.Context'
@@ -314,7 +313,7 @@ class Module(MetaModule):
                 ])
             )
         )
-    
+
     # TODO: Isolate on its own module
     async def api_next(
         self, _: PyTgCalls, update: Update
@@ -326,16 +325,33 @@ class Module(MetaModule):
         if not context:
             try:
                 await self.player.api.leave_chat(update.chat_id)
+
             except (NotInCallError, NoActiveGroupCall):
                 pass
+
         else:
             try:
-                await self.player.next(context)
-                await self.player.status(context)
+                status: 'stub.PlayerStatus' = self.player_status
+                match await self.player.next(context):
+                    case status.ENDED:
+                        await self.goodies.update_status(
+                            context, self.i18n[context]['gpl_ended'])
+
+                    case status.NO_VOICE:
+                        await self.goodies.update_status(
+                            context, self.i18n[context]['pl_novoice'])
+
+                    case status.OK:
+                        await self.playerui.player_init(context)
+
+                    case status.UNKNOWN_ERROR:
+                        await self.goodies.update_status(
+                            context, self.i18n[context]['pl_retry'])
+
             except Exception as e:
                 await self.goodies.report_error(
                     context, e, traceback.format_exc(),
-                    '[unexpected exception, player.next/player.status]')
+                    '[unexpected exception, player.next/playerui.player_init]')
 
         await self.ustorage.unlock_chat(context)
 

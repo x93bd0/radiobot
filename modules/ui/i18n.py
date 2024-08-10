@@ -20,13 +20,15 @@ class Module(MetaModule):
         self.default: str = 'en'
 
         self.strings: dict[str, dict[str, str]] = {}
+        self.consts: dict[str, dict[str, str]] = {}
 
     async def setup(self) -> None:
         pass
 
     async def install(self) -> None:
         self.client.register_configuration(self, {
-            'i18n_strings': 'strings.json'
+            'i18n_strings': 'strings.json',
+            'i18n_consts': 'consts.json'
         })
 
     async def post_install(self) -> None:
@@ -51,6 +53,17 @@ class Module(MetaModule):
 
             else:
                 self.strings = temp
+            
+        with open(
+            self.client.config['i18n_consts'],
+            encoding='utf-8'
+        ) as consts:
+            temp: dict[str, dict[str, str]] = json.load(consts)
+            if not clean_update:
+                self.consts.update(temp)
+            
+            else:
+                self.consts = temp
 
     def __getitem__(self, key: object) -> dict[str, str]:
         if hasattr(key, 'lang_code'):

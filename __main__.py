@@ -56,14 +56,28 @@ class MainClient(MetaClient):
                 self.defby[k] = module
 
             elif check_collisions:
-                if k in self.defby:
+                if k in self.defby and self.defby[k] != module:
                     raise SettingsCollision(
                         f'Configuration `{k}` is already used by module ' +
-                        f'`{self.defby[k].identifier}`' +
+                        f'`{self.defby[k].identifier}` ' +
                         f'(requested by module `{module.identifier}`)'
                     )
 
                 self.defby[k] = module
+
+    def require_modules(
+        self, modules: tuple[str]
+    ) -> tuple[MetaModule]:
+        output: list[MetaModule] = []
+        for module in modules:
+            if module not in self.modules:
+                raise MainException(
+                    'There is no module with the '
+                    f'identifier `{module}` installed'
+                )
+
+            output.append(self.modules[module])
+        return tuple(output)
 
 
 async def _setup() -> MainClient:
@@ -126,9 +140,11 @@ def cli():
 
 
 async def async_run(
-    setup_mode: bool = False
+    setup_mode: bool = False,
+    debug_mode: bool = False
 ) -> None:
     bot: MainClient = await _setup()
+    bot.debug = debug_mode
 
     for v in bot.modules.values():
         logging.debug(
@@ -162,8 +178,11 @@ async def async_run(
 @click.option(
     '--setup', '-s', 'setup_mode',
     is_flag=True)
-def run(setup_mode: bool):
-    asyncio.run(async_run(setup_mode))
+@click.option(
+    '--debug', '-d', 'debug_mode',
+    is_flag=True)
+def run(setup_mode: bool, debug_mode: bool):
+    asyncio.run(async_run(setup_mode, debug_mode))
 
 
 async def async_test() -> None:
@@ -242,7 +261,6 @@ async def async_test() -> None:
                 logging.info('Running test_post_install of `%s` module (%d/%d)',
                     identifier, no, len(tdata['post_install']))
                 no += 1
-                await cbl(bot.modules[mod])
 
 @cli.command()
 def test() -> None:

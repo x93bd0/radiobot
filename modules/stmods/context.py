@@ -4,7 +4,10 @@ from typing import Optional, Any
 
 from pyrogram.types import Message, CallbackQuery, Update
 from pyrogram import Client
+
+from asyncpg.connection import Connection
 from asyncpg import Record
+
 from stub import MetaClient, MetaModule
 
 
@@ -34,11 +37,11 @@ class Context:
         repeat many messages on the Chat
     """
 
-    voice_id: int
-    log_id: int
-    logging: bool
-    lang_code: str
-    status_id: int
+    voice_id: int = 0
+    log_id: int = 0
+    logging: bool = False
+    lang_code: str = 'en'
+    status_id: int = -1
 
 ContextTuple = tuple[int, bool, str, int]
 
@@ -115,10 +118,15 @@ class Module(MetaModule):
         self.db.ctx_get_by_logid = self.ctx_get_by_logid
         self.db.ctx_delete_by_voice = self.ctx_delete_by_voice
 
-
     async def post_install(self):
         self.i18n = self.client.modules['I18n']
+        async with self.db.pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute('''
+                    DELETE FROM Telegram.Context;
+                ''')
 
+    async def db_init(self, conn: Connection) -> None:
         def encoder(data: Context) -> ContextTuple:
             return (
                 data.log_id, data.logging,
@@ -134,24 +142,18 @@ class Module(MetaModule):
                 status_id=data[3]
             )
 
-        async with self.db.pool.acquire() as conn:
-            async with conn.transaction():
-                await conn.set_type_codec(
-                    typename='contextobj',
-                    schema='telegram',
-                    format='tuple',
-                    encoder=encoder,
-                    decoder=decoder
-                )
-
-                await conn.execute('''
-                    DELETE FROM Telegram.Context;
-                ''')
+        await conn.set_type_codec(
+            typename='contextobj',
+            schema='telegram',
+            format='tuple',
+            encoder=encoder,
+            decoder=decoder
+        )
 
 
     def c11e(
         self, method: Callable[[MetaClient, Update], Any],
-        auto_update: bool = True
+        auto_update: bool = True, required: bool = False
     ) -> Callable:
         """Give context to a Telegram Handler Method
 
@@ -161,7 +163,10 @@ class Module(MetaModule):
             Method to `contextualize`
         auto_update
             Auto update the context after a modification
-            is detected when the method execution ends. 
+            is detected when the method execution ends.
+        required
+            Used for disallowing method execution when
+            there is no `Context` to use
 
         Returns
         -------
@@ -181,6 +186,9 @@ class Module(MetaModule):
             context: Optional['Context'] = \
                 await self.db.ctx_get_by_aid(chat_id)
 
+            if required and not context:
+                return
+
             if not context:
                 lc: str = self.i18n.default
                 if hasattr(update, 'from_user') and \
@@ -193,7 +201,7 @@ class Module(MetaModule):
 
                 if chat is not None:
                     context = self.db.Context(
-                        voice_id=0,
+                        voice_id=chat,
                         log_id=chat,
                         logging=True,
                         lang_code=lc,
@@ -201,7 +209,8 @@ class Module(MetaModule):
                     )
 
             output: Any = await method(client, update, context)
-            if auto_update and output is None:
+            if auto_update and output is not None:
+                print('delete context from')
                 await self.db.ctx_upd(context)
 
             elif output is False and context is not None:
@@ -361,6 +370,7 @@ class Module(MetaModule):
     async def ctx_delete(
         self, context: Context
     ) -> None:
+        # traceback.print_stack()
         async with self.db.pool.acquire() as conn:
             async with conn.transaction():
                 await conn.execute(

@@ -5,6 +5,7 @@ import logging
 import os
 
 from asyncpg.pool import Pool, create_pool
+from asyncpg.connection import Connection
 from stub import  MetaClient, MetaModule
 
 
@@ -21,14 +22,6 @@ class Module(MetaModule):
             'Ustorage_Modules': []
         })
 
-        self.pool = await create_pool(
-            user=os.getenv('PDB_USER', 'admin'),
-            password=os.getenv('PDB_PAWD', 'admin'),
-            host=os.getenv('PDB_HOST', '127.0.0.1'),
-            port=int(os.getenv('PDB_PORT', '5432')),
-            database=os.getenv('PDB_NAME', 'radiobot')
-        )
-
         self.modules = {}
         for mod in self.client.config['Ustorage_Modules']:
             module: MetaModule = importlib.import_module(mod).Module(
@@ -41,6 +34,15 @@ class Module(MetaModule):
             await module.install()
 
             self.modules[module.identifier] = module
+
+        self.pool = await create_pool(
+            user=os.getenv('PDB_USER', 'admin'),
+            password=os.getenv('PDB_PAWD', 'admin'),
+            host=os.getenv('PDB_HOST', '127.0.0.1'),
+            port=int(os.getenv('PDB_PORT', '5432')),
+            database=os.getenv('PDB_NAME', 'radiobot'),
+            init=self.db_init
+        )
 
     async def setup(self) -> None:
         for mod in self.modules.values():
@@ -57,6 +59,18 @@ class Module(MetaModule):
         if identifier in self.modules:
             logging.debug('Running test of `%s` module', identifier)
             return self.modules[identifier]
+
+    async def db_init(self, conn: Connection) -> None:
+            for mod in self.modules.values():
+                if hasattr(mod, 'db_init'):
+                    try:
+                        await mod.db_init(conn)
+        
+                    except Exception:
+                        logging.warning(
+                            'Can\'t initialize connetion with module'
+                            '`%s` parameters, please check it...')
+
 
     def stub(self, root: dict[str, Any]) -> None:
         root['ustorage'] = {
